@@ -1,5 +1,5 @@
 [package]
-name = "game-boy-core"
+name = "core"
 version = "0.1.0"
 authors = ["mayrom <nhruo123@gmail.com>"]
 edition = "2018"
