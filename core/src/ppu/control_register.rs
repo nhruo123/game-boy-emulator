@@ -35,4 +35,28 @@ impl ControlRegister {
 
         val
     }
+
+    pub fn get_bg_tile_index_adder(&self) -> u16 {
+        if self.bg_and_win_tile_data_select {
+            0x9C00
+        } else {
+            0x9800
+        }
+    }
+
+    pub fn get_window_tile_index_adder(&self) -> u16 {
+        if self.bg_and_win_tile_data_select {
+            0x9C00
+        } else {
+            0x9800
+        }
+    }
+
+    pub fn get_bg_tile_adder(&self) -> u16 {
+        if self.bg_tile_map_select {
+            0x8000
+        } else {
+            0x8800
+        }
+    }
 }

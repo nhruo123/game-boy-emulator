@@ -4,6 +4,7 @@ use crate::ppu::Color;
 
 const OAM_BASE: u16 = 0xFE00;
 
+#[derive(Copy, Clone)]
 pub struct Attributes<'a> {
     pub palette: &'a [Color],
     pub vram_bank: usize,
