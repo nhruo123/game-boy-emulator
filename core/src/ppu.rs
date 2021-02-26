@@ -3,7 +3,9 @@ mod control_register;
 mod status_register;
 mod color;
 mod dma;
+mod sprite;
 
+use crate::ppu::sprite::Sprite;
 use crate::ppu::dma::DmaManager;
 use crate::mmu::{ MemWrite, MemRead, IoDevice, Mmu };
 use crate::ppu::color::Color;
@@ -24,6 +26,11 @@ const VRAM_CLOCK_CYCLES: u32 = 172;
 const VRAM_BANK_SIZE: usize = 0x2000;
 const VRAM_BANK_COUNT: usize = 0x2;
 
+#[derive(PartialEq, Copy, Clone)]
+pub enum GameBoyMode {
+    Classic,
+    Color,
+}
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum PpuMode {
@@ -64,6 +71,7 @@ struct Ppu {
     clock: u32, // CPU clock cycles stored
     irq: Irq,
 
+    game_boy_mode: GameBoyMode,
     dma_manager: DmaManager,
 
     selected_vram_bank: usize,
@@ -174,12 +182,90 @@ impl Ppu {
     }
 
 
-    pub fn read_from_vram(&mut self, adder: u16) -> u8 {
-        self.vram[self.selected_vram_bank][(adder - 0x8000) as usize]
+    fn read_from_vram(&self, bank_index: usize, adder: u16) -> u8 {
+        self.vram[bank_index][(adder - 0x8000) as usize]
     }
 
-    pub fn write_to_vram(&mut self, adder: u16, value: u8) {
-        self.vram[self.selected_vram_bank][(adder - 0x8000) as usize] = value;
+    fn write_to_vram(&mut self, bank_index: usize, adder: u16, value: u8) {
+        self.vram[bank_index][(adder - 0x8000) as usize] = value;
+    }
+
+
+    // returns array of pixels to draw
+    fn draw_line(&self, mmu: &Mmu) -> Vec<(u8, u8, u8)> {
+        todo!()
+    }
+
+    // color and blow background == true 
+    fn draw_sprites_line(&self, mmu: &Mmu) -> Vec<(Color, bool)> {
+        let mut line_vector: Vec<(Color, bool)> = vec![(Color::new(), false); DISPLAY_WIDTH];
+
+        let sprite_hight: u16 = if self.control_register.sprite_size { 16 } else { 8 };
+        let sprite_width: u16 = 8;
+
+        let line = self.line as i32;
+
+        let mut sprite_counter = 0;
+
+        for sprite_index in 0..40 {
+
+            if sprite_counter > 10 {
+                break;
+            }
+
+            let sprite = Sprite::new(sprite_index, self.control_register.sprite_size, mmu, &self.object_color_palette);
+
+            // sprite out of screen
+            if line < sprite.y || line >= sprite.y + (sprite_hight as i32) { continue }
+            if sprite.x < -7 || sprite.x >= DISPLAY_WIDTH as i32 + 8 { continue }
+
+            let tile_y: u16 = if sprite.attributes.y_flip {
+                sprite_hight - 1 - ((line - sprite.y) as u16)
+            } else {
+                (line - sprite.y) as u16
+            };
+
+            // Every tile is 16 bytes of mem and every line is 2 bytes aka 8 bytes
+            let tile_adder = 0x8000u16 + (sprite.tile_index * 16) + (tile_y * 2);
+
+            let (tile_byte_0, tile_byte_1) = if self.game_boy_mode == GameBoyMode::Color {
+                (self.read_from_vram(sprite.attributes.vram_bank, tile_adder),
+                 self.read_from_vram(sprite.attributes.vram_bank, tile_adder + 1))
+            } else {
+                (self.read_from_vram(0, tile_adder), self.read_from_vram(0, tile_adder + 1))
+            };
+
+
+            for x_index in 0..sprite_width {
+                if sprite.x + (x_index as i32) < 0 || sprite.x >= (DISPLAY_WIDTH as i32) { continue }
+
+                let color_musk = 1 << (if sprite.attributes.x_flip { x_index } else { 7 - x_index });
+
+                let color_index = 
+                    if color_musk & tile_byte_0 != 0 { 1 } else { 0 } | 
+                    if color_musk & tile_byte_1 != 0 { 2 } else { 0 };
+
+                // 0 is transparent in sprites
+                if color_index == 0 { continue }
+
+                if self.game_boy_mode == GameBoyMode::Color {
+                    let color = self.object_color_palette.get_color(color_index);
+
+                    line_vector[(x_index as i32 + sprite.x) as usize] = (color, sprite.attributes.priority)
+                } else {
+                    let color = 
+                        if sprite.attributes.palette_number == 0 { self.object_mono_palette_0.get_color(color_index) }
+                        else { self.object_mono_palette_1.get_color(color_index) };
+
+                    line_vector[(x_index as i32 + sprite.x) as usize] = (color, sprite.attributes.priority)
+                }
+
+                sprite_counter += 1;
+            }
+        }
+        
+
+        line_vector
     }
 }
 
@@ -187,7 +273,7 @@ impl Ppu {
 impl IoDevice for Ppu {
     fn read_byte(&mut self, _mmu: &Mmu, adder: u16) -> MemRead { 
         match adder {
-            0x8000 ..= 0x9FFF => MemRead::Read(self.read_from_vram(adder)),
+            0x8000 ..= 0x9FFF => MemRead::Read(self.read_from_vram(self.selected_vram_bank, adder)),
 
             0xFF40 => MemRead::Read(self.control_register.get()),
             0xFF41 => MemRead::Read(self.status_register.get()),
@@ -219,7 +305,7 @@ impl IoDevice for Ppu {
 
     fn write_byte(&mut self, _mmu: &Mmu, adder: u16, val: u8) -> MemWrite { 
         match adder {
-            0x8000 ..= 0x9FFF => { (self.write_to_vram(adder, val)); MemWrite::Write },
+            0x8000 ..= 0x9FFF => { (self.write_to_vram(self.selected_vram_bank, adder, val)); MemWrite::Write },
 
             0xFF40 => { self.control_register.set(val); MemWrite::Write },
             0xFF41 => { self.status_register.set(val); MemWrite::Write },

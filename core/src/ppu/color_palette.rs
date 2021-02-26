@@ -12,11 +12,20 @@ impl MonoColorPalette {
         (self.colors.3.monochrome_color_to_u8() << 6)    
     }
 
-    pub fn write(&mut self, val: u8){
+    pub fn write(&mut self, val: u8) {
         self.colors.0 = Color::u8_to_monochrome(val & 0x3);
         self.colors.1 = Color::u8_to_monochrome((val << 2) & 0x3);
         self.colors.2 = Color::u8_to_monochrome((val << 4) & 0x3);
         self.colors.3 = Color::u8_to_monochrome((val << 6) & 0x3);
+    }
+
+    pub fn get_color(&self, index: usize) -> Color {
+        match index {
+            0 => self.colors.0,
+            1 => self.colors.1,
+            2 => self.colors.2,
+            _ => self.colors.3,
+        }
     }
 }
 pub struct ColorPalette {
@@ -71,5 +80,13 @@ impl ColorPalette {
         if self.auto_inc {
             self.color_index = (self.color_index + 1) % 0x40;
         }
+    }
+
+    pub fn get_palette(&self, index: usize) -> &Vec<Color> {
+        &self.colors[index % 8]
+    }
+
+    pub fn get_color(&self, index: usize) -> Color {
+        self.colors[self.color_index][index]
     }
 }

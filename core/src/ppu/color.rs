@@ -31,7 +31,7 @@ impl Color {
     }
 
     pub fn new() -> Color {
-        Color::Rgb(0,0,0)
+        Color::Rgb(0xFF, 0xFF, 0xFF)
     }
 
     pub fn set_low(&mut self, low: u8) {
