@@ -42,6 +42,19 @@ impl Mmu {
         }
     }
 
+    pub fn register_device(&mut self, io_device: Rc<RefCell<dyn IoDevice>>, range: (u16, u16)) {
+        for i in range.0 .. range.1 {
+            if self.memory_mapped_devices.contains_key(&i) {
+                match self.memory_mapped_devices.get_mut(&i) {
+                    Some(v) => v.push(io_device.clone()),
+                    None => unreachable!(),
+                }
+            } else {
+                self.memory_mapped_devices.insert(i, vec![io_device.clone()]);
+            }
+        }
+    }
+
     pub fn read_byte(&self, adder: u16) -> u8 {
 
         match self.memory_mapped_devices.get(&adder) {

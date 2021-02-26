@@ -5,6 +5,14 @@ pub struct MonoColorPalette {
 }
 
 impl MonoColorPalette {
+
+
+    pub fn new() -> MonoColorPalette {
+        MonoColorPalette {
+            colors: (Color::White, Color::LightGray, Color::DarkGray, Color::Black)
+        }
+    }
+
     pub fn read(&self) -> u8 {
         self.colors.0.monochrome_color_to_u8() | 
         (self.colors.1.monochrome_color_to_u8() << 2) | 

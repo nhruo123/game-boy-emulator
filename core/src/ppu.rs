@@ -5,6 +5,11 @@ mod color;
 mod dma;
 mod sprite;
 
+use crate::emulator::GameBoyMode;
+use crate::hardware::{ DISPLAY_WIDTH, DISPLAY_HIGHT };
+use std::cell::RefCell;
+use std::rc::Rc;
+use crate::hardware::Hardware;
 use crate::ppu::sprite::Attributes;
 use crate::ppu::sprite::Sprite;
 use crate::ppu::dma::DmaManager;
@@ -15,9 +20,6 @@ use crate::ppu::control_register::ControlRegister;
 use crate::ppu::status_register::StatusRegister;
 use crate::ic::Irq;
 
-const DISPLAY_WIDTH: usize = 160;
-const DISPLAY_HIGHT: usize = 144;
-
 
 const H_BLINK_CLOCK_CYCLES: u32 = 87;
 const V_BLINK_CLOCK_CYCLES: u32 = 456;
@@ -26,12 +28,6 @@ const VRAM_CLOCK_CYCLES: u32 = 172;
 
 const VRAM_BANK_SIZE: usize = 0x2000;
 const VRAM_BANK_COUNT: usize = 0x2;
-
-#[derive(PartialEq, Copy, Clone)]
-pub enum GameBoyMode {
-    Classic,
-    Color,
-}
 
 #[derive(PartialEq, Copy, Clone)]
 enum BackGroundColorPriority {
@@ -79,6 +75,8 @@ struct Ppu {
     clock: u32, // CPU clock cycles stored
     irq: Irq,
 
+    hardware: Rc<RefCell<dyn Hardware>>,
+
     game_boy_mode: GameBoyMode,
     dma_manager: DmaManager,
 
@@ -110,6 +108,35 @@ struct Ppu {
 impl Ppu {
 
 
+    pub fn new(hw: Rc<RefCell<dyn Hardware>>, irq: Irq, game_boy_mode: GameBoyMode) -> Ppu {
+        Ppu {
+            irq: irq,
+            hardware: hw,
+            game_boy_mode: game_boy_mode,
+            clock: 0,
+            dma_manager: DmaManager::new(),
+            selected_vram_bank: 0,
+            vram: vec![vec![0 ;VRAM_BANK_SIZE]; VRAM_BANK_SIZE],
+            line: 0,
+            line_compare: 0,
+
+            x_scroll: 0,
+            y_scroll: 0,
+
+            window_x_pos: 0,
+            window_y_pos: 0,
+            status_register: StatusRegister::new(),
+            control_register: ControlRegister::new(),
+
+            bg_mono_palette: MonoColorPalette::new(),
+            object_mono_palette_0: MonoColorPalette::new(),
+            object_mono_palette_1: MonoColorPalette::new(),
+
+            bg_color_palette: ColorPalette::new(),
+            object_color_palette: ColorPalette::new(),
+        }
+    }
+
     pub fn cycle(&mut self, mmu: &mut Mmu, clock: u32) {        
         let (clock, dma_in_progress) = self.dma_manager.cycle(self.status_register.mode, mmu, clock);
 
@@ -126,7 +153,7 @@ impl Ppu {
                     self.line += 1;
 
                     // we reached bottom of screen switch to vblank 
-                    if self.line > 143 {
+                    if self.line >= DISPLAY_HIGHT as u8 {
                         
                         self.irq.v_blank(true);
 

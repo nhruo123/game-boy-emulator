@@ -10,6 +10,18 @@ pub struct StatusRegister {
 }
 
 impl StatusRegister {
+
+    pub fn new() -> StatusRegister {
+        StatusRegister {
+            mode: PpuMode::OAM,
+            coincidence_flag: false,
+            h_blank_int: false,
+            v_blank_int: false,
+            oam_int: false,
+            coincidence_int: false,
+        }
+    }
+
     pub fn set(&mut self, val: u8) {
         self.h_blank_int = (val & (1 << 3)) != 0;
         self.v_blank_int = (val & (1 << 4)) != 0;

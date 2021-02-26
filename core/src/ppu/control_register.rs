@@ -10,6 +10,21 @@ pub struct ControlRegister {
 }
 
 impl ControlRegister {
+
+
+    pub fn new() -> ControlRegister {
+        ControlRegister {
+            display_enabled: false,
+            window_tile_map_select: false,
+            window_display_enabled: false,
+            bg_and_win_tile_data_select: false,
+            bg_tile_map_select: false,
+            sprite_size: false,
+            sprit_display_enabled: false,
+            bg_and_win_display: false,
+        }
+    }
+
     pub fn set(&mut self, val: u8) {
         self.bg_and_win_display = (val & 1) != 0;
         self.sprit_display_enabled = (val & (1 << 1)) != 0;
