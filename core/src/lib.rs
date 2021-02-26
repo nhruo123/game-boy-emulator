@@ -8,3 +8,4 @@ mod hardware;
 mod timer;
 mod cartridge_controller;
 mod emulator;
+mod joypad;

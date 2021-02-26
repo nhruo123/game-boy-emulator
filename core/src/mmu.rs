@@ -42,7 +42,7 @@ impl Mmu {
         }
     }
 
-    pub fn register_device(&mut self, io_device: Rc<RefCell<dyn IoDevice>>, range: (u16, u16)) {
+    pub fn register_device<T>(&mut self, range: (u16, u16), io_device: Rc<RefCell<T>>) where T: IoDevice + 'static {
         for i in range.0 .. range.1 {
             if self.memory_mapped_devices.contains_key(&i) {
                 match self.memory_mapped_devices.get_mut(&i) {

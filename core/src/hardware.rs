@@ -21,4 +21,7 @@ pub trait Hardware {
 
     // The return value needs to be epoch time in microseconds.
     fn clock(&mut self) -> u64;
+
+
+    fn run(&mut self) -> bool;
 }

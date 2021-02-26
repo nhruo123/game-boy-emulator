@@ -42,6 +42,8 @@ impl Interrupts {
 
 
 // interrupt request
+
+#[derive(Clone)]
 pub struct Irq {
     request: Rc<RefCell<Interrupts>>
 }

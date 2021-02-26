@@ -1,5 +1,8 @@
 
 
+use crate::ic::Ic;
+use std::cell::RefCell;
+use std::rc::Rc;
 use crate::utils;
 use crate::mmu::Mmu;
 
@@ -23,6 +26,8 @@ pub struct Processor {
     pc: u16, // program counter
 
     ime: bool, // Interrupt Master Enable Flag 
+
+    halt: bool,
 }
 
 impl Processor {
@@ -40,6 +45,7 @@ impl Processor {
             pc: 0,
             sp: 0xFFFE,
             ime: true,
+            halt: false,
         }
     }
 
@@ -253,9 +259,39 @@ impl Processor {
         w
     }
 
+    pub fn check_interrupt(&mut self, mmu: &mut Mmu, ic: &Rc<RefCell<Ic>>) -> u32 {
+        if !self.ime {
+            if self.halt {
+                if let Some(value) = ic.borrow_mut().peek() {
+                    self.halt = false;
+                }
+            }
+
+            0
+        } else {
+            let value = match ic.borrow_mut().consume() {
+                Some(value) => value,
+                None => return 0,
+            };
+
+            self.interrupted(mmu, value);
+
+            self.halt = false;
+
+            16
+        }
+    }
+
+    fn interrupted(&mut self, mmu: &mut Mmu, value: u8) {
+        self.disable_interrupt();
+
+        self.push(mmu, self.get_pc());
+        self.set_pc(value as u16);
+    }
+
 
     // return machine cycles spend on execution + fetch
-    fn fetch_decode_execute(&mut self, mmu: &mut Mmu) -> u32 {
+    pub fn cycle (&mut self, mmu: &mut Mmu) -> u32 {
         let opcode = self.fetch_byte(mmu);
 
 

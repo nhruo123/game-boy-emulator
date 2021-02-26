@@ -71,11 +71,11 @@ impl From<u8> for PpuMode {
 
 
 
-struct Ppu {
+pub struct Ppu {
     clock: u32, // CPU clock cycles stored
     irq: Irq,
 
-    hardware: Rc<RefCell<dyn Hardware>>,
+    hardware: Rc<RefCell<Box<dyn Hardware>>>,
 
     game_boy_mode: GameBoyMode,
     dma_manager: DmaManager,
@@ -108,7 +108,7 @@ struct Ppu {
 impl Ppu {
 
 
-    pub fn new(hw: Rc<RefCell<dyn Hardware>>, irq: Irq, game_boy_mode: GameBoyMode) -> Ppu {
+    pub fn new(hw: Rc<RefCell<Box<dyn Hardware>>>, irq: Irq, game_boy_mode: GameBoyMode) -> Ppu {
         Ppu {
             irq: irq,
             hardware: hw,
