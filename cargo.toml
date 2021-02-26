@@ -1,0 +1,6 @@
+[workspace]
+
+members = [
+    "gameboy_core",
+    "empty-hardware",
+]
