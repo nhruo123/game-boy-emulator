@@ -1,5 +1,24 @@
 use crate::ppu::color::Color;
 
+pub struct MonoColorPalette {
+    colors: (Color, Color, Color, Color)
+}
+
+impl MonoColorPalette {
+    pub fn read(&self) -> u8 {
+        self.colors.0.monochrome_color_to_u8() | 
+        (self.colors.1.monochrome_color_to_u8() << 2) | 
+        (self.colors.2.monochrome_color_to_u8() << 4) | 
+        (self.colors.3.monochrome_color_to_u8() << 6)    
+    }
+
+    pub fn write(&mut self, val: u8){
+        self.colors.0 = Color::u8_to_monochrome(val & 0x3);
+        self.colors.1 = Color::u8_to_monochrome((val << 2) & 0x3);
+        self.colors.2 = Color::u8_to_monochrome((val << 4) & 0x3);
+        self.colors.3 = Color::u8_to_monochrome((val << 6) & 0x3);
+    }
+}
 pub struct ColorPalette {
     colors: Vec<Vec<Color>>,
     color_index: usize,

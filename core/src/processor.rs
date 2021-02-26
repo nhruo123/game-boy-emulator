@@ -271,7 +271,7 @@ impl Processor {
             0x07 => { let v = self.aul_rlc(self.get_a()); self.set_a(v); 8 }, // RLCA
             0x08 => { let v = self.fetch_word(mmu); mmu.write_word(v, self.get_sp()); 8 }, // LD (u16),SP
 
-            _other => todo!("Unimplemented opcode"),
+            _other => todo!("Unimplemented opcode {}!", opcode),
 
         }
     }

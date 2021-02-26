@@ -2,10 +2,12 @@ mod color_palette;
 mod control_register;
 mod status_register;
 mod color;
+mod dma;
 
+use crate::ppu::dma::DmaManager;
 use crate::mmu::{ MemWrite, MemRead, IoDevice, Mmu };
 use crate::ppu::color::Color;
-use crate::ppu::color_palette::ColorPalette;
+use crate::ppu::color_palette::{ ColorPalette, MonoColorPalette};
 use crate::ppu::control_register::ControlRegister;
 use crate::ppu::status_register::StatusRegister;
 use crate::ic::Irq;
@@ -19,8 +21,11 @@ const V_BLINK_CLOCK_CYCLES: u32 = 456;
 const OAM_CLOCK_CYCLES: u32 = 80;
 const VRAM_CLOCK_CYCLES: u32 = 172;
 
+const VRAM_BANK_SIZE: usize = 0x2000;
+const VRAM_BANK_COUNT: usize = 0x2;
 
-#[derive(Clone, Copy)]
+
+#[derive(Clone, Copy, PartialEq)]
 pub enum PpuMode {
     HorizontalBlanking,
     VerticalBlanking,
@@ -52,19 +57,17 @@ impl From<u8> for PpuMode {
     }
 }
 
-fn mono_palette_to_u8(p: Vec<Color>) -> u8 {
-    // TODO: make sure palette is 4 colors
 
-    p[0].monochrome_color_to_u8() | 
-    (p[1].monochrome_color_to_u8() << 2) | 
-    (p[2].monochrome_color_to_u8() << 4) | 
-    (p[3].monochrome_color_to_u8() << 6)
-}
 
 
 struct Ppu {
     clock: u32, // CPU clock cycles stored
     irq: Irq,
+
+    dma_manager: DmaManager,
+
+    selected_vram_bank: usize,
+    vram: Vec<Vec<u8>>,
 
     line: u8,
     line_compare: u8,
@@ -75,12 +78,12 @@ struct Ppu {
     window_y_pos: u8,
     window_x_pos: u8,
 
-    status_register: StatusRegister,
+    pub status_register: StatusRegister,
     control_register: ControlRegister,
 
-    bg_mono_palette: Vec<Color>,
-    object_mono_palette_0: Vec<Color>,
-    object_mono_palette_1: Vec<Color>,
+    bg_mono_palette: MonoColorPalette,
+    object_mono_palette_0: MonoColorPalette,
+    object_mono_palette_1: MonoColorPalette,
 
     bg_color_palette: ColorPalette,
     object_color_palette: ColorPalette,
@@ -91,10 +94,14 @@ struct Ppu {
 impl Ppu {
 
 
-    pub fn cycle(&mut self, mmu: &mut Mmu, clock: u32) {
+    pub fn cycle(&mut self, mmu: &mut Mmu, clock: u32) {        
+        let (clock, dma_in_progress) = self.dma_manager.cycle(self.status_register.mode, mmu, clock);
+
         self.clock += clock;
 
-        // TODO: deal with dma requests
+        if dma_in_progress {
+            return;
+        }
 
         match self.status_register.mode {
             PpuMode::HorizontalBlanking => {
@@ -165,28 +172,81 @@ impl Ppu {
             self.irq.lcd_stat(true);
         }
     }
+
+
+    pub fn read_from_vram(&mut self, adder: u16) -> u8 {
+        self.vram[self.selected_vram_bank][(adder - 0x8000) as usize]
+    }
+
+    pub fn write_to_vram(&mut self, adder: u16, value: u8) {
+        self.vram[self.selected_vram_bank][(adder - 0x8000) as usize] = value;
+    }
 }
 
 
 impl IoDevice for Ppu {
     fn read_byte(&mut self, _mmu: &Mmu, adder: u16) -> MemRead { 
         match adder {
+            0x8000 ..= 0x9FFF => MemRead::Read(self.read_from_vram(adder)),
+
             0xFF40 => MemRead::Read(self.control_register.get()),
             0xFF41 => MemRead::Read(self.status_register.get()),
             0xFF42 => MemRead::Read(self.y_scroll),
             0xFF43 => MemRead::Read(self.x_scroll),
             0xFF44 => MemRead::Read(self.line),
             0xFF45 => MemRead::Read(self.line_compare),
-
-            0xFF47 => MemRead::Read(mono_palette_to_u8(self.bg_mono_palette.clone())),
-            0xFF48 => MemRead::Read(mono_palette_to_u8(self.object_mono_palette_0.clone())),
-            0xFF49 => MemRead::Read(mono_palette_to_u8(self.object_mono_palette_1.clone())),
+            0xFF46 => MemRead::Read(self.dma_manager.read_oam()),
+            0xFF47 => MemRead::Read(self.bg_mono_palette.read()),
+            0xFF48 => MemRead::Read(self.object_mono_palette_0.read()),
+            0xFF49 => MemRead::Read(self.object_mono_palette_1.read()),
 
             0xFF4A => MemRead::Read(self.window_y_pos),
             0xFF4B => MemRead::Read(self.window_x_pos),
+
+            0xFF4F => MemRead::Read(self.selected_vram_bank as u8),
+
+            0xFF51 ..= 0xFF55 => MemRead::Read(self.dma_manager.read_vram_dma(adder)),
+
+            0xFF68 => MemRead::Read(self.bg_color_palette.read_index_reg()),
+            0xFF69 => MemRead::Read(self.bg_color_palette.read_data_reg()),
+
+            0xFF6A => MemRead::Read(self.object_color_palette.read_index_reg()),
+            0xFF6B => MemRead::Read(self.object_color_palette.read_data_reg()),
             
             _ => MemRead::Ignore,
         }
     }
-    fn write_byte(&mut self, _: &Mmu, _: u16, _: u8) -> MemWrite { todo!() }
+
+    fn write_byte(&mut self, _mmu: &Mmu, adder: u16, val: u8) -> MemWrite { 
+        match adder {
+            0x8000 ..= 0x9FFF => { (self.write_to_vram(adder, val)); MemWrite::Write },
+
+            0xFF40 => { self.control_register.set(val); MemWrite::Write },
+            0xFF41 => { self.status_register.set(val); MemWrite::Write },
+            0xFF42 => { self.y_scroll = val; MemWrite::Write },
+            0xFF43 => { self.x_scroll = val; MemWrite::Write },
+            0xFF44 => MemWrite::Write,
+            0xFF45 => { self.line_compare = val; MemWrite::Write },
+
+            0xFF46 => { self.dma_manager.write_oam(val); MemWrite::Write },
+            0xFF47 => { self.bg_mono_palette.write(val); MemWrite::Write },
+            0xFF48 => { self.object_mono_palette_0.write(val); MemWrite::Write },
+            0xFF49 => { self.object_mono_palette_1.write(val); MemWrite::Write },
+
+            0xFF4A => { self.window_y_pos = val; MemWrite::Write },
+            0xFF4B => { self.window_x_pos = val; MemWrite::Write },
+
+            0xFF4F => { self.selected_vram_bank = (val & 0x1) as usize; MemWrite::Write },
+
+            0xFF51 ..= 0xFF55 => { self.dma_manager.write_vram_dma(adder, val); MemWrite::Write },
+
+            0xFF68 => { self.bg_color_palette.write_index_reg(val); MemWrite::Write },
+            0xFF69 => { self.bg_color_palette.write_data_reg(val); MemWrite::Write },
+
+            0xFF6A => { self.object_color_palette.write_index_reg(val); MemWrite::Write },
+            0xFF6B => { self.object_color_palette.write_data_reg(val); MemWrite::Write },
+            
+            _ => MemWrite::Ignore,
+        }
+    }
 }
