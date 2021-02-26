@@ -16,6 +16,12 @@ pub enum GameBoyMode {
     Color,
 }
 
+#[derive(Clone)]
+pub struct EmulatorConfig {
+    pub game_boy_mode: GameBoyMode,
+    pub allow_bad_checksum: bool,
+}
+
 pub struct Emulator {
     hw: Rc<RefCell<Box<dyn Hardware>>>,
     processor: Processor,
@@ -30,17 +36,17 @@ pub struct Emulator {
 
 
 impl Emulator {
-    pub fn new(rom_file: &str, hw: Box<dyn Hardware>, game_boy_mode: GameBoyMode) -> Emulator {
+    pub fn new(rom: Vec<u8>, hw: Box<dyn Hardware>, emulator_config: EmulatorConfig) -> Emulator {
 
         let hw = Rc::new(RefCell::new(hw));
         let ic = Rc::new(RefCell::new(Ic::new()));
         let irq = ic.borrow().get_requester();
-        let cartridge_controller = Rc::new(RefCell::new(CartridgeController::new(rom_file, game_boy_mode, false)));
+        let cartridge_controller = Rc::new(RefCell::new(CartridgeController::new(rom, emulator_config.game_boy_mode, emulator_config.allow_bad_checksum)));
         let joypad = Rc::new(RefCell::new(Joypad::new(Rc::clone(&hw), irq.clone())));
 
         let processor = Processor::new();
         let mut mmu = Mmu::new();
-        let ppu = Rc::new(RefCell::new(Ppu::new(Rc::clone(&hw), irq.clone(), game_boy_mode)));
+        let ppu = Rc::new(RefCell::new(Ppu::new(Rc::clone(&hw), irq.clone(), emulator_config.game_boy_mode)));
         let timer = Rc::new(RefCell::new(Timer::new(irq.clone())));
 
 
@@ -79,6 +85,8 @@ impl Emulator {
         self.timer.borrow_mut().cycle(clock);
         self.joypad.borrow_mut().poll();
 
+        // TODO add sleep for the clock cycle the cpu did.
+
     }
 
     // cycle as long as hw allows
@@ -95,7 +103,7 @@ impl Emulator {
 
 
 
-pub fn run(rom_file: &str, hw: Box<dyn Hardware>, game_boy_mode: GameBoyMode) {
-    let mut emulator = Emulator::new(rom_file, hw, game_boy_mode);
+pub fn run(rom: Vec<u8>, hw: Box<dyn Hardware>, emulator_config: EmulatorConfig) {
+    let mut emulator = Emulator::new(rom, hw, emulator_config);
     while emulator.poll() {}
 }

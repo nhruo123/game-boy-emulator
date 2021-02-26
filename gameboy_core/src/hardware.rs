@@ -14,7 +14,7 @@ pub enum Key {
 }
 
 pub trait Hardware {
-    fn draw_line(&mut self, line: usize, buffer: [(u8, u8, u8)]);
+    fn draw_line(&mut self, line: usize, buffer: &[(u8, u8, u8)]);
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 

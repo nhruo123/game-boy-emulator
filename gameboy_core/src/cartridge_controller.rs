@@ -45,9 +45,7 @@ fn calc_checksum(rom: &[u8]) -> u8 {
 }
 
 impl CartridgeController {
-    pub fn new(path: &str, game_boy_mode: GameBoyMode, allow_bad_checksum: bool) -> CartridgeController {
-        
-        let rom = std::fs::read(path).unwrap();
+    pub fn new(rom: Vec<u8>, game_boy_mode: GameBoyMode, allow_bad_checksum: bool) -> CartridgeController {
 
 
         if !calc_checksum(&rom) == rom[0x14D] && !allow_bad_checksum {
@@ -55,7 +53,7 @@ impl CartridgeController {
         }
 
         let cartridge: Box<dyn Cartridge> = match rom[CARTRIDGE_TYPE_ADDER] {
-            ROM_ONLY_TYPE => Box::new(RomOnly::new(rom)),
+            ROM_ONLY_TYPE => Box::new(RomOnly::new(rom.clone())),
             _ => unimplemented!("unimplemented cartridge type"),
         };
 
