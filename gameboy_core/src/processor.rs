@@ -8,9 +8,10 @@ use crate::mmu::Mmu;
 
 
 const ZERO_FLAG_MASK: u8 = 0b1 << 7;
-const SUB_FLAG_MASK: u8 = 0b1 << 6;
+const NEG_FLAG_MASK: u8 = 0b1 << 6;
 const HALF_CARRY_FLAG_MASK: u8 = 0b1 << 5;
 const CARRY_FLAG_MASK: u8 = 0b1 << 4;
+
 
 pub struct Processor {
     a: u8,
@@ -183,15 +184,15 @@ impl Processor {
         }
     }
 
-    pub fn get_sub_flag(&self) -> bool {
-        self.f & SUB_FLAG_MASK != 0
+    pub fn get_neg_flag(&self) -> bool {
+        self.f & NEG_FLAG_MASK != 0
     }
 
-    pub fn set_sub_flag(&mut self, v: bool) {
+    pub fn set_neg_flag(&mut self, v: bool) {
         if v {
-            self.f |= SUB_FLAG_MASK;
+            self.f |= NEG_FLAG_MASK;
         } else {
-            self.f &= !SUB_FLAG_MASK;
+            self.f &= !NEG_FLAG_MASK;
         }
     }
 
@@ -289,6 +290,14 @@ impl Processor {
         self.set_pc(value as u16);
     }
 
+    fn stop(&mut self) {
+        unimplemented!("stop is unimplemented");
+    }
+
+    fn halt(&mut self) {
+        unimplemented!("halt is unimplemented")
+    }
+
 
     // return machine cycles spend on execution + fetch
     pub fn cycle (&mut self, mmu: &mut Mmu) -> u32 {
@@ -301,11 +310,132 @@ impl Processor {
             0x01 => { let v = self.fetch_word(mmu); self.set_bc(v); 12 }, // LD BC, U16
             0x02 => { mmu.write_byte(self.get_bc(), self.get_a()); 8 }, // LD (BC),A
             0x03 => { self.set_bc(self.get_bc().wrapping_add(1)); 8 }, // INC BC
-            0x04 => { let v = self.aul_inc(self.b); self.set_b(v); 4 }, // INC B
-            0x05 => { let v = self.aul_dec(self.b); self.set_b(v); 4 }, // DEC B
+            0x04 => { let v = self.aul_inc(self.get_b()); self.set_b(v); 4 }, // INC B
+            0x05 => { let v = self.aul_dec(self.get_b()); self.set_b(v); 4 }, // DEC B
             0x06 => { let v = self.fetch_byte(mmu); self.set_b(v); 8 }, // LD B,u8
-            0x07 => { let v = self.aul_rlc(self.get_a()); self.set_a(v); 8 }, // RLCA
+            0x07 => { let v = self.aul_rlc(self.get_a()); self.set_a(v); 4 }, // RLCA
             0x08 => { let v = self.fetch_word(mmu); mmu.write_word(v, self.get_sp()); 8 }, // LD (u16),SP
+            0x09 => { self.aul_inc_16b(self.get_bc()) ; 8 }, // ADD HL,BC
+            0x0A => { let v = mmu.read_byte(self.get_bc()); self.set_a(v) ; 8 }, // LD A,(BC)
+            0x0B => { self.set_bc(self.get_bc().wrapping_add(1)) ; 8 }, // DEC BC
+            0x0C => { let v = self.aul_inc(self.get_c()); self.set_c(v); 4 }, // INC C
+            0x0D => { let v = self.aul_dec(self.get_c()); self.set_c(v); 4 }, // DEC C
+            0x0E => { let v = self.fetch_byte(mmu); self.set_c(v); 8 }, // LD C,u8
+            0x0F => { let v = self.aul_rrc(self.get_a()); self.set_a(v); 4 }, // RRCA
+            0x10 => { self.stop(); 4 }, // STOP
+            0x11 => { let v = self.fetch_word(mmu); self.set_de(v); 12 }, // LD DE,u16
+            0x12 => { mmu.write_byte(self.get_de(), self.get_a()); 8 }, // LD (DE),A
+            0x13 => { self.set_de(self.get_de().wrapping_add(1)); 8 }, // INC DE
+            0x14 => { let v = self.aul_inc(self.get_d()); self.set_d(v); 4 }, // INC D
+            0x15 => { let v = self.aul_dec(self.get_d()); self.set_d(v); 4 }, // DEC D
+            0x16 => { let v = self.fetch_byte(mmu); self.set_d(v); 4 }, // LD D,u8
+            0x17 => { let v = self.aul_rl(self.get_a()); self.set_a(v); 4 }, // RLA
+            0x18 => { self.jump_relative(mmu); 12 }, // JR i8
+            0x19 => { self.aul_inc_16b(self.get_de()); 8 }, // ADD HL,DE
+            0x1A => { self.aul_inc_16b(self.get_de()); 8 }, // LD A,(DE)
+            0x1B => { self.set_de(self.get_de().wrapping_add(1)) ; 8 }, // DEC DE
+            0x1C => { let v = self.aul_inc(self.get_e()); self.set_e(v); 4 }, // INC E
+            0x1D => { let v = self.aul_dec(self.get_e()); self.set_e(v); 4 }, // DEC E
+            0x1E => { let v = self.fetch_byte(mmu); self.set_e(v); 8 }, // LD E,u8
+            0x1F => { let v = self.aul_rr(self.get_a()); self.set_a(v); 4 }, // RRA
+            0x20 => if !self.get_zero_flag() {self.jump_relative(mmu); 12} else { self.set_pc(self.get_pc() + 1); 8 }, // JR NZ,i8
+            0x21 => { let v = self.fetch_word(mmu); self.set_hl(v); 12 }, // LD HL,u16
+            0x22 => { let v = self.get_hl(); self.set_hl(v.wrapping_add(1)); mmu.write_byte(v, self.get_a()); 8 }, // LD (HL+),A
+            0x23 => { self.set_hl(self.get_hl().wrapping_add(1)); 8 }, // INC HL
+            0x24 => { let v = self.aul_inc(self.get_h()); self.set_h(v); 4 }, // INC H
+            0x25 => { let v = self.aul_dec(self.get_h()); self.set_h(v); 4 }, // DEC H
+            0x26 => { let v = self.fetch_byte(mmu); self.set_h(v); 8 }, // LD H,u8
+            0x27 => { self.aul_daa(); 4 }, // DAA
+            0x28 => if self.get_zero_flag() { self.jump_relative(mmu); 12} else { self.set_pc(self.get_pc() + 1); 8 }, // JR Z,i8
+            0x29 => { self.aul_inc_16b(self.get_hl()); 8 }, // ADD HL,HL
+            0x2A => { let v = self.get_hl(); self.set_hl(v.wrapping_add(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD (HL+),A
+            0x2B => { self.set_hl(self.get_hl().wrapping_add(1)) ; 8 }, // DEC HL
+            0x2C => { let v = self.aul_inc(self.get_l()); self.set_l(v); 4 }, // INC L
+            0x2D => { let v = self.aul_dec(self.get_l()); self.set_l(v); 4 }, // DEC L
+            0x2E => { let v = self.fetch_byte(mmu); self.set_l(v); 8 }, // LD L,u8
+            0x2F => { self.set_a(!self.get_a()); self.set_half_flag(true); self.set_neg_flag(true); 4 }, // LD L,u8
+            0x30 => if !self.get_carry_flag() { self.jump_relative(mmu); 12 } else { self.set_pc(self.get_pc() + 1); 8 }, // JR NC,i8
+            0x31 => { let v = self.fetch_word(mmu); self.set_sp(v); 12 }, // LD SP,u16
+            0x32 => { let v = self.get_hl(); self.set_hl(v.wrapping_sub(1)); mmu.write_byte(v, self.get_a()); 8 }, // LD (HL-),A
+            0x33 => { self.set_sp(self.get_sp().wrapping_add(1)); 8 }, // INC SP
+            0x34 => { let v = mmu.read_byte(self.get_hl()); mmu.write_byte(self.get_hl(), self.aul_inc(v)); 12 }, // INC (HL)
+            0x35 => { let v = mmu.read_byte(self.get_hl()); mmu.write_byte(self.get_hl(), self.aul_dec(v)); 12 }, // DEC (HL)
+            0x36 => { let v = self.fetch_byte(mmu); mmu.write_byte(self.get_hl(), v); 12 }, // LD (HL),u8
+            0x37 => { self.set_carry_flag(true); self.set_neg_flag(false); self.set_half_flag(false); 4 }, // SCF
+            0x38 => if self.get_carry_flag() { self.jump_relative(mmu); 12 } else { self.set_pc(self.get_pc() + 1); 8 }, // JR C,i8
+            0x39 => { self.aul_inc_16b(self.get_sp()); 8 }, // ADD HL,SP
+            0x3A => { let v = self.get_hl(); self.set_hl(v.wrapping_sub(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD A,(HL-)
+            0x3B => { self.set_sp(self.get_sp().wrapping_sub(1)); 8 }, // DEC SP
+            0x3C => { let v = self.aul_inc(self.get_a()); self.set_a(v); 4 }, // INC A
+            0x3D => { let v = self.aul_dec(self.get_a()); self.set_a(v); 4 }, // DEC A
+            0x3E => { let v = self.fetch_byte(mmu); self.set_a(v); 8 }, // LD A,u8
+            0x3F => { self.set_carry_flag(!self.get_carry_flag()); self.set_neg_flag(false); self.set_half_flag(false); 4 }, // CCF
+            0x40 => 4, // LD B, B
+            0x41 => { self.set_b(self.get_c()); 4 }, // LD B, C
+            0x42 => { self.set_b(self.get_d()); 4 }, // LD B, D
+            0x43 => { self.set_b(self.get_e()); 4 }, // LD B, E
+            0x44 => { self.set_b(self.get_h()); 4 }, // LD B, H
+            0x45 => { self.set_b(self.get_l()); 4 }, // LD B, L
+            0x46 => { self.set_b(mmu.read_byte(self.get_hl())); 8 }, // LD B, (HL)
+            0x47 => { self.set_b(self.get_a()); 4 }, // LD B, A
+            0x48 => { self.set_c(self.get_b()); 4 }, // LD C, B
+            0x49 => 4, // LD C, C
+            0x4A => { self.set_c(self.get_d()); 4 }, // LD C, D
+            0x4B => { self.set_c(self.get_e()); 4 }, // LD C, E
+            0x4C => { self.set_c(self.get_h()); 4 }, // LD C, H
+            0x4D => { self.set_c(self.get_l()); 4 }, // LD C, L
+            0x4E => { self.set_c(mmu.read_byte(self.get_hl())); 8 }, // LD C, (HL)
+            0x4F => { self.set_c(self.get_a()); 4 }, // LD C, A
+            0x50 => { self.set_d(self.get_b()); 4 }, // LD D, B
+            0x51 => { self.set_d(self.get_c()); 4 }, // LD D, C
+            0x52 => { 4 }, // LD D, D
+            0x53 => { self.set_d(self.get_e()); 4 }, // LD D, E
+            0x54 => { self.set_d(self.get_h()); 4 }, // LD D, H
+            0x55 => { self.set_d(self.get_l()); 4 }, // LD D, L
+            0x56 => { self.set_d(mmu.read_byte(self.get_hl())); 8 }, // LD D, (HL)
+            0x57 => { self.set_d(self.get_a()); 4 }, // LD D, A
+            0x58 => { self.set_e(self.get_b()); 4 }, // LD E, B
+            0x59 => { self.set_e(self.get_c()); 4 }, // LD E, C
+            0x5A => { self.set_e(self.get_d()); 4 }, // LD E, D
+            0x5B => { 4 }, // LD E, E
+            0x5C => { self.set_e(self.get_h()); 4 }, // LD E, H
+            0x5D => { self.set_e(self.get_l()); 4 }, // LD E, L
+            0x5E => { self.set_e(mmu.read_byte(self.get_hl())); 8 }, // LD E, (HL)
+            0x5F => { self.set_e(self.get_a()); 4 }, // LD E, A
+            0x60 => { self.set_h(self.get_b()); 4 }, // LD H, B
+            0x61 => { self.set_h(self.get_c()); 4 }, // LD H, C
+            0x62 => { self.set_h(self.get_d()); 4 }, // LD H, D
+            0x63 => { self.set_h(self.get_e()); 4 }, // LD H, E
+            0x64 => { 4 }, // LD H, H
+            0x65 => { self.set_h(self.get_l()); 4 }, // LD H, L
+            0x66 => { self.set_h(mmu.read_byte(self.get_hl())); 8 }, // LD H, (HL)
+            0x67 => { self.set_h(self.get_a()); 4 }, // LD H, A
+            0x68 => { self.set_l(self.get_b()); 4 }, // LD L, B
+            0x69 => { self.set_l(self.get_c()); 4 }, // LD L, C
+            0x6A => { self.set_l(self.get_d()); 4 }, // LD L, D
+            0x6B => { self.set_l(self.get_e()); 4 }, // LD L, E
+            0x6C => { self.set_l(self.get_h()); 4 }, // LD L, H
+            0x6D => { 4 }, // LD L, L
+            0x6E => { self.set_l(mmu.read_byte(self.get_hl())); 8 }, // LD L, (HL)
+            0x6F => { self.set_l(self.get_a()); 4 }, // LD L, A
+            0x70 => { mmu.write_byte(self.get_hl(), self.get_b()); 8 }, // LD (HL), B
+            0x71 => { mmu.write_byte(self.get_hl(), self.get_c()); 8 }, // LD (HL), C
+            0x72 => { mmu.write_byte(self.get_hl(), self.get_d()); 8 }, // LD (HL), D
+            0x73 => { mmu.write_byte(self.get_hl(), self.get_h()); 8 }, // LD (HL), E
+            0x74 => { mmu.write_byte(self.get_hl(), self.get_h()); 8 }, // LD (HL), H
+            0x75 => { mmu.write_byte(self.get_hl(), self.get_l()); 8 }, // LD (HL), L
+            0x76 => { self.halt(); 4 } // HALT
+            0x77 => { mmu.write_byte(self.get_hl(), self.get_a()); 8 }, // LD (HL), A
+            0x78 => { self.set_a(self.get_b()); 4 }, // LD A, B
+            0x79 => { self.set_a(self.get_c()); 4 }, // LD A, C
+            0x7A => { self.set_a(self.get_d()); 4 }, // LD A, D
+            0x7B => { self.set_a(self.get_e()); 4 }, // LD A, E
+            0x7C => { self.set_a(self.get_h()); 4 }, // LD A, H
+            0x7D => { self.set_a(self.get_l()); 4 }, // LD A, L
+            0x7E => { self.set_a(mmu.read_byte(self.get_hl())); 8 }, // LD A, (HL)
+            0x7F => { 4 }, // LD A, A
+            
+
 
             _other => todo!("Unimplemented opcode {:#x}!", opcode),
 
@@ -316,13 +446,24 @@ impl Processor {
     // aul operations
 
     fn aul_inc(&mut self, val: u8) -> u8 {
-        self.set_half_flag((val & 0x0F) + 1 > 0x0F);
+        self.set_half_flag((val & 0x0F) + 1 == 0x10);
         let val = val.wrapping_add(1);
 
         self.set_zero_flag(val == 0);
-        self.set_sub_flag(false);
+        self.set_neg_flag(false);
 
         val
+    }
+
+    fn aul_inc_16b(&mut self, val: u16) {
+        let (val, ov) = self.get_hl().overflowing_add(val);
+
+
+        self.set_carry_flag(ov);
+        self.set_half_flag(((val & 0x7FF) + (val & 0x7FF)) & 0x800 == 0x800);
+        self.set_neg_flag(false);
+
+        self.set_hl(val);
     }
 
     fn aul_dec(&mut self, val: u8) -> u8 {
@@ -330,7 +471,7 @@ impl Processor {
         let val = val.wrapping_sub(1);
 
         self.set_zero_flag(val == 0);
-        self.set_sub_flag(true);
+        self.set_neg_flag(true);
 
         val
     }
@@ -338,7 +479,7 @@ impl Processor {
     fn aul_rlc(&mut self, val: u8) -> u8 {
         let last_bit_was_on = (val & 0x80) != 0;
 
-        self.set_sub_flag(false);
+        self.set_neg_flag(false);
         self.set_half_flag(false);
         self.set_zero_flag(false);
 
@@ -354,5 +495,79 @@ impl Processor {
         val
     }
 
+    fn aul_rrc(&mut self, val: u8) -> u8 {
+        let first_bit_was_on = (val & 0x1) != 0;
+
+        self.set_neg_flag(false);
+        self.set_half_flag(false);
+        self.set_zero_flag(false);
+
+        self.set_carry_flag(first_bit_was_on);
+
+        let mut val = val >> 1;
+
+        if first_bit_was_on {
+            val |= 0x80;
+        }
+
+
+        val
+    }
+
+    fn aul_rl(&mut self, val: u8) -> u8 {
+        let prev_carry = self.get_carry_flag();
+        self.set_carry_flag(val & 0x80 != 0);
+        let val = (val << 1) | if prev_carry { 1 } else { 0 };
+
+        self.set_neg_flag(false);
+        self.set_half_flag(false);
+        self.set_zero_flag(false);
+
+        val
+    }
+
+    fn aul_rr(&mut self, val: u8) -> u8 {
+        let prev_carry = self.get_carry_flag();
+        self.set_carry_flag(val & 0x1 != 0);
+        let val = (val >> 1) | if prev_carry { 0x80 } else { 0 };
+
+        self.set_neg_flag(false);
+        self.set_half_flag(false);
+        self.set_zero_flag(false);
+
+        val
+    }
+
+    fn aul_daa(&mut self) {
+        let mut a = self.get_a();
+        let mut correction = 0;
+        let mut newCarry = false;
+
+        if self.get_half_flag() || (!self.get_neg_flag() && ((a & 0xf) > 0x9)) {
+            correction |= 0x6;
+        }
+
+        if self.get_carry_flag() || (!self.get_neg_flag() && a > 0x99) {
+            correction |= 0x60;
+            newCarry = self.get_carry_flag();
+        }
+
+
+        a = if self.get_neg_flag() { a.wrapping_sub(correction) } else { a.wrapping_add(correction) };
+
+        self.set_carry_flag(newCarry);
+        self.set_half_flag(false);
+        self.set_zero_flag(a == 0);
+        self.set_a(a)
+
+    }
+
+
+
+    fn jump_relative(&mut self, mmu: &mut Mmu) {
+        let n = self.fetch_byte(mmu) as i8;
+
+        self.set_sp(self.get_pc().wrapping_add(n as u16));
+    }
 
 }
