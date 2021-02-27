@@ -315,7 +315,7 @@ impl Processor {
             0x06 => { let v = self.fetch_byte(mmu); self.set_b(v); 8 }, // LD B,u8
             0x07 => { let v = self.aul_rlc(self.get_a()); self.set_a(v); 4 }, // RLCA
             0x08 => { let v = self.fetch_word(mmu); mmu.write_word(v, self.get_sp()); 8 }, // LD (u16),SP
-            0x09 => { self.aul_inc_16b(self.get_bc()) ; 8 }, // ADD HL,BC
+            0x09 => { let v = self.aul_add_16b(self.get_hl(), self.get_bc()); self.set_hl(v) ; 8 }, // ADD HL,BC
             0x0A => { let v = mmu.read_byte(self.get_bc()); self.set_a(v) ; 8 }, // LD A,(BC)
             0x0B => { self.set_bc(self.get_bc().wrapping_add(1)) ; 8 }, // DEC BC
             0x0C => { let v = self.aul_inc(self.get_c()); self.set_c(v); 4 }, // INC C
@@ -331,8 +331,8 @@ impl Processor {
             0x16 => { let v = self.fetch_byte(mmu); self.set_d(v); 4 }, // LD D,u8
             0x17 => { let v = self.aul_rl(self.get_a()); self.set_a(v); 4 }, // RLA
             0x18 => { self.jump_relative(mmu); 12 }, // JR i8
-            0x19 => { self.aul_inc_16b(self.get_de()); 8 }, // ADD HL,DE
-            0x1A => { self.aul_inc_16b(self.get_de()); 8 }, // LD A,(DE)
+            0x19 => { let v = self.aul_add_16b(self.get_hl(), self.get_de()); self.set_hl(v); 8 }, // ADD HL,DE
+            0x1A => { self.set_a(mmu.read_byte(self.get_de())); 8 }, // LD A,(DE)
             0x1B => { self.set_de(self.get_de().wrapping_add(1)) ; 8 }, // DEC DE
             0x1C => { let v = self.aul_inc(self.get_e()); self.set_e(v); 4 }, // INC E
             0x1D => { let v = self.aul_dec(self.get_e()); self.set_e(v); 4 }, // DEC E
@@ -347,7 +347,7 @@ impl Processor {
             0x26 => { let v = self.fetch_byte(mmu); self.set_h(v); 8 }, // LD H,u8
             0x27 => { self.aul_daa(); 4 }, // DAA
             0x28 => if self.get_zero_flag() { self.jump_relative(mmu); 12} else { self.set_pc(self.get_pc() + 1); 8 }, // JR Z,i8
-            0x29 => { self.aul_inc_16b(self.get_hl()); 8 }, // ADD HL,HL
+            0x29 => { let v = self.aul_add_16b(self.get_hl(), self.get_hl()); self.set_hl(v); 8 }, // ADD HL,HL
             0x2A => { let v = self.get_hl(); self.set_hl(v.wrapping_add(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD (HL+),A
             0x2B => { self.set_hl(self.get_hl().wrapping_add(1)) ; 8 }, // DEC HL
             0x2C => { let v = self.aul_inc(self.get_l()); self.set_l(v); 4 }, // INC L
@@ -363,7 +363,7 @@ impl Processor {
             0x36 => { let v = self.fetch_byte(mmu); mmu.write_byte(self.get_hl(), v); 12 }, // LD (HL),u8
             0x37 => { self.set_carry_flag(true); self.set_neg_flag(false); self.set_half_flag(false); 4 }, // SCF
             0x38 => if self.get_carry_flag() { self.jump_relative(mmu); 12 } else { self.set_pc(self.get_pc() + 1); 8 }, // JR C,i8
-            0x39 => { self.aul_inc_16b(self.get_sp()); 8 }, // ADD HL,SP
+            0x39 => { let v = self.aul_add_16b(self.get_hl(), self.get_hl()); self.set_sp(v); 8 }, // ADD HL,SP
             0x3A => { let v = self.get_hl(); self.set_hl(v.wrapping_sub(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD A,(HL-)
             0x3B => { self.set_sp(self.get_sp().wrapping_sub(1)); 8 }, // DEC SP
             0x3C => { let v = self.aul_inc(self.get_a()); self.set_a(v); 4 }, // INC A
@@ -504,14 +504,67 @@ impl Processor {
             0xC3 => { let v = self.fetch_word(mmu); self.set_pc(v); 16 } // JP u16
             0xC4 => if !self.get_zero_flag() { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } 
                     else { self.set_pc(self.get_pc().wrapping_add(2)); 12 } // CALL NZ,u16
-            
+            0xC5 => { self.push(mmu, self.get_bc()); 16 } // PUSH BC
+            0xC6 => { let v = self.fetch_byte(mmu); self.aul_add_a(v, false); 8 } // ADD A,u8
+            0xC7 => { self.push(mmu, self.get_pc()); self.set_pc(0); 16 } // RST 00h
+            0xC8 => if self.get_zero_flag() { let v = self.pop(mmu); self.set_pc(v); 20 } else { 8 }  // RET Z
+            0xC9 => { let v = self.pop(mmu); self.set_pc(v); 16 } // RET
+            0xCA => if self.get_zero_flag() { let v = self.fetch_word(mmu); self.set_pc(v); 16 } else { self.set_pc(self.get_pc().wrapping_add(2)); 12 }, // JP Z,u16
+            0xCB => self.decode_and_execute_bc_opcodes(mmu), // PREFIX CB
+            0xCC => if self.get_zero_flag() { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } 
+                else { self.set_pc(self.get_pc().wrapping_add(2)); 12 } // CALL Z,u16
+            0xCD => { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } // CALL u16
+            0xCE => { let v = self.fetch_byte(mmu); self.aul_add_a(v, true); 8 } // ADC A,u8
+            0xCF => { self.push(mmu, self.get_pc()); self.set_pc(0x8); 16 } // RST 08h
+            0xD0 => if !self.get_carry_flag() { let v = self.pop(mmu) ; self.set_pc(v); 20 } else { 8 }, // RET NC
+            0xD1 => { let v = self.pop(mmu); self.set_de(v) ; 12}, // POP DE
+            0xD2 => if !self.get_carry_flag() { let v = self.fetch_word(mmu); self.set_pc(v); 16 } else { self.set_pc(self.get_pc().wrapping_add(2)); 12 }, // JP NC,u16
+            0xD4 => if !self.get_carry_flag() { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } 
+                    else { self.set_pc(self.get_pc().wrapping_add(2)); 12 } // CALL NC,u16
+            0xD5 => { self.push(mmu, self.get_de()); 16 } // PUSH DE
+            0xD6 => { let v = self.fetch_byte(mmu); self.aul_sub_a(v, false); 8 } // SUB A,u8
+            0xD7 => { self.push(mmu, self.get_pc()); self.set_pc(0x10); 16 } // RST 10h
+            0xD8 => if self.get_carry_flag() { let v = self.pop(mmu); self.set_pc(v); 20 } else { 8 }  // RET C
+            0xD9 => { let v = self.pop(mmu); self.set_pc(v); self.enable_interrupt(); 16 } // RETI
+            0xDA => if self.get_carry_flag() { let v = self.fetch_word(mmu); self.set_pc(v); 16 } else { self.set_pc(self.get_pc().wrapping_add(2)); 12 }, // JP C,u16
+            0xDC => if self.get_carry_flag() { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } 
+                else { self.set_pc(self.get_pc().wrapping_add(2)); 12 } // CALL C,u16
+            0xDE => { let v = self.fetch_byte(mmu); self.aul_sub_a(v, true); 8 } // SBC A,u8
+            0xDF => { self.push(mmu, self.get_pc()); self.set_pc(0x18); 16 } // RST 18h
+            0xE0 => { let v = self.fetch_byte(mmu); mmu.write_byte(0xFF00 | v as u16, self.get_a()); 12 }, // LD (FF00+u8),A
+            0xE1 => { let v = self.pop(mmu); self.set_hl(v) ; 12}, // POP HL
+            0xE2 => { mmu.write_byte(0xFF00 + self.get_c() as u16, self.get_a()); 8 }, // LD (FF00+c),A
+            0xE5 => { self.push(mmu, self.get_hl()); 16 } // PUSH HL
+            0xE6 => { let v = self.fetch_byte(mmu); self.aul_and_a(v); 8 } // AND A,u8
+            0xE7 => { self.push(mmu, self.get_pc()); self.set_pc(0x20); 16 } // RST 20h
+            0xE8 => { let nb = self.fetch_byte(mmu); let v = self.aul_add_16b(self.get_sp(), nb as u16); self.set_sp(v); self.set_zero_flag(false); 16 }, // ADD SP,i8
+            0xE9 => { self.set_pc(self.get_hl()) ; 4 }, // JP HL
+            0xEA => { let v = self.fetch_word(mmu); mmu.write_byte(v, self.get_a()); 8 }, // LD (u16),SP
+            0xEE => { let v = self.fetch_byte(mmu); self.aul_xor_a(v); 8 } // XOR A,u8
+            0xEF => { self.push(mmu, self.get_pc()); self.set_pc(0x28); 16 } // RST 28h
+            0xF0 => { let v = self.fetch_byte(mmu); self.set_a(mmu.read_byte(0xFF00 | v as u16)); 12 }, // LD A,(FF00+u8)
+            0xF1 => { let v = self.pop(mmu); self.set_af(v);  12 } // POP AF
+            0xF2 => { self.set_a(mmu.read_byte(0xFF00 | self.get_c() as u16)); 12 }, // LD A,(FF00+C)
+            0xF3 => { self.disable_interrupt(); 4 } // DI
+            0xF5 => { self.push(mmu, self.get_af()); 16 } // PUSH AF
+            0xF6 => { let v = self.fetch_byte(mmu); self.aul_or_a(v); 8 } // OR A,u8
+            0xF7 => { self.push(mmu, self.get_pc()); self.set_pc(0x30); 16 } // RST 30h
+            0xF8 => { let nb = self.fetch_byte(mmu); let v = self.aul_add_16b(self.get_sp(), nb as u16); self.set_hl(v); self.set_zero_flag(false); 12 }, // LD HL,SP+i8
+            0xF9 => { self.set_sp(self.get_hl()); 8 } // LD SP,HL
+            0xFA => { let v = self.fetch_word(mmu); self.set_a(mmu.read_byte(v)) ;16 } // LD A,(u16)
+            0xFB => { self.enable_interrupt(); 4 } // EI
+            0xFE => { let v = self.fetch_byte(mmu); self.aul_cp_a(v); 8 } // CP A,u8
+            0xFF => { self.push(mmu, self.get_pc()); self.set_pc(0x38); 16 } // RST 38h
 
-            
-            
+            opcode => panic!("bad opcode {:#x}!", opcode),
+        }
+    }
 
+    pub fn decode_and_execute_bc_opcodes (&mut self, mmu: &mut Mmu) -> u32 {
+        let opcode = self.fetch_byte(mmu);
 
-            _other => todo!("Unimplemented opcode {:#x}!", opcode),
-
+        match opcode {
+            _other => todo!("Unimplemented opcode 0xCB : {:#x}!", opcode),
         }
     }
 
@@ -528,15 +581,15 @@ impl Processor {
         val
     }
 
-    fn aul_inc_16b(&mut self, val: u16) {
-        let (val, ov) = self.get_hl().overflowing_add(val);
+    fn aul_add_16b(&mut self, a: u16, b: u16) -> u16 {
+        let (new_val, ov) = a.overflowing_add(b);
 
 
         self.set_carry_flag(ov);
-        self.set_half_flag(((val & 0x7FF) + (val & 0x7FF)) & 0x800 == 0x800);
+        self.set_half_flag(((a & 0x7) + (b & 0x7)) & 0x8 == 0x8);
         self.set_neg_flag(false);
 
-        self.set_hl(val);
+        new_val
     }
 
     fn aul_dec(&mut self, val: u8) -> u8 {
