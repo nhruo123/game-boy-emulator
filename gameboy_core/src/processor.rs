@@ -295,12 +295,17 @@ impl Processor {
     }
 
     fn halt(&mut self) {
-        unimplemented!("halt is unimplemented")
+        self.halt = true;
     }
 
 
     // return machine cycles spend on execution + fetch
     pub fn cycle (&mut self, mmu: &mut Mmu) -> u32 {
+
+        if self.halt {
+            return 4;
+        }
+
         let opcode = self.fetch_byte(mmu);
 
 
