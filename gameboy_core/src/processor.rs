@@ -434,6 +434,79 @@ impl Processor {
             0x7D => { self.set_a(self.get_l()); 4 }, // LD A, L
             0x7E => { self.set_a(mmu.read_byte(self.get_hl())); 8 }, // LD A, (HL)
             0x7F => { 4 }, // LD A, A
+            0x80 => { self.aul_add_a(self.get_b(), false); 4 }, // ADD A, B
+            0x81 => { self.aul_add_a(self.get_c(), false); 4 }, // ADD A, C
+            0x82 => { self.aul_add_a(self.get_d(), false); 4 }, // ADD A, D
+            0x83 => { self.aul_add_a(self.get_e(), false); 4 }, // ADD A, E
+            0x84 => { self.aul_add_a(self.get_h(), false); 4 }, // ADD A, H
+            0x85 => { self.aul_add_a(self.get_l(), false); 4 }, // ADD A, L
+            0x86 => { self.aul_add_a(mmu.read_byte(self.get_hl()), false); 8 }, // ADD A, (HL)
+            0x87 => { self.aul_add_a(self.get_a(), false); 4 }, // ADD A, A
+            0x88 => { self.aul_add_a(self.get_b(), true); 4 }, // ADC A, B
+            0x89 => { self.aul_add_a(self.get_c(), true); 4 }, // ADC A, C
+            0x8A => { self.aul_add_a(self.get_d(), true); 4 }, // ADC A, D
+            0x8B => { self.aul_add_a(self.get_e(), true); 4 }, // ADC A, E
+            0x8C => { self.aul_add_a(self.get_h(), true); 4 }, // ADC A, H
+            0x8D => { self.aul_add_a(self.get_l(), true); 4 }, // ADC A, L
+            0x8E => { self.aul_add_a(mmu.read_byte(self.get_hl()), true); 8 }, // ADC A, (HL)
+            0x8F => { self.aul_add_a(self.get_a(), true); 4 }, // ADC A, A
+            0x90 => { self.aul_sub_a(self.get_b(), false); 4 }, // SUB A, B
+            0x91 => { self.aul_sub_a(self.get_c(), false); 4 }, // SUB A, C
+            0x92 => { self.aul_sub_a(self.get_d(), false); 4 }, // SUB A, D
+            0x93 => { self.aul_sub_a(self.get_e(), false); 4 }, // SUB A, E
+            0x94 => { self.aul_sub_a(self.get_h(), false); 4 }, // SUB A, H
+            0x95 => { self.aul_sub_a(self.get_l(), false); 4 }, // SUB A, L
+            0x96 => { self.aul_sub_a(mmu.read_byte(self.get_hl()), false); 8 }, // SUB A, (HL)
+            0x97 => { self.aul_sub_a(self.get_a(), false); 4 }, // SUB A, A
+            0x98 => { self.aul_sub_a(self.get_b(), true); 4 }, // SBC A, B
+            0x99 => { self.aul_sub_a(self.get_c(), true); 4 }, // SBC A, C
+            0x9A => { self.aul_sub_a(self.get_d(), true); 4 }, // SBC A, D
+            0x9B => { self.aul_sub_a(self.get_e(), true); 4 }, // SBC A, E
+            0x9C => { self.aul_sub_a(self.get_h(), true); 4 }, // SBC A, H
+            0x9D => { self.aul_sub_a(self.get_l(), true); 4 }, // SBC A, L
+            0x9E => { self.aul_sub_a(mmu.read_byte(self.get_hl()), true); 8 }, // SBC A, (HL)
+            0x9F => { self.aul_sub_a(self.get_a(), true); 4 }, // SBC A, A
+            0xA0 => { self.aul_and_a(self.get_b()); 4 }, // AND A, B
+            0xA1 => { self.aul_and_a(self.get_c()); 4 }, // AND A, C
+            0xA2 => { self.aul_and_a(self.get_d()); 4 }, // AND A, D
+            0xA3 => { self.aul_and_a(self.get_e()); 4 }, // AND A, E
+            0xA4 => { self.aul_and_a(self.get_h()); 4 }, // AND A, H
+            0xA5 => { self.aul_and_a(self.get_l()); 4 }, // AND A, L
+            0xA6 => { self.aul_and_a(mmu.read_byte(self.get_hl())); 8 }, // AND A, (HL)
+            0xA7 => { self.aul_and_a(self.get_a()); 4 }, // AND A, A
+            0xA8 => { self.aul_xor_a(self.get_b()); 4 }, // XOR A, B
+            0xA9 => { self.aul_xor_a(self.get_c()); 4 }, // XOR A, C
+            0xAA => { self.aul_xor_a(self.get_d()); 4 }, // XOR A, D
+            0xAB => { self.aul_xor_a(self.get_e()); 4 }, // XOR A, E
+            0xAC => { self.aul_xor_a(self.get_h()); 4 }, // XOR A, H
+            0xAD => { self.aul_xor_a(self.get_l()); 4 }, // XOR A, L
+            0xAE => { self.aul_xor_a(mmu.read_byte(self.get_hl())); 8 }, // XOR A, (HL)
+            0xAF => { self.aul_xor_a(self.get_a()); 4 }, // XOR A, A
+            0xB0 => { self.aul_or_a(self.get_b()); 4 }, // OR A, B
+            0xB1 => { self.aul_or_a(self.get_c()); 4 }, // OR A, C
+            0xB2 => { self.aul_or_a(self.get_d()); 4 }, // OR A, D
+            0xB3 => { self.aul_or_a(self.get_e()); 4 }, // OR A, E
+            0xB4 => { self.aul_or_a(self.get_h()); 4 }, // OR A, H
+            0xB5 => { self.aul_or_a(self.get_l()); 4 }, // OR A, L
+            0xB6 => { self.aul_or_a(mmu.read_byte(self.get_hl())); 8 }, // OR A, (HL)
+            0xB7 => { self.aul_or_a(self.get_a()); 4 }, // OR A, A
+            0xB8 => { self.aul_cp_a(self.get_b()); 4 }, // CP A, B
+            0xB9 => { self.aul_cp_a(self.get_c()); 4 }, // CP A, C
+            0xBA => { self.aul_cp_a(self.get_d()); 4 }, // CP A, D
+            0xBB => { self.aul_cp_a(self.get_e()); 4 }, // CP A, E
+            0xBC => { self.aul_cp_a(self.get_h()); 4 }, // CP A, H
+            0xBD => { self.aul_cp_a(self.get_l()); 4 }, // CP A, L
+            0xBE => { self.aul_cp_a(mmu.read_byte(self.get_hl())); 8 }, // CP A, (HL)
+            0xBF => { self.aul_cp_a(self.get_a()); 4 }, // CP A, A
+            0xC0 => if !self.get_zero_flag() { let v = self.pop(mmu) ; self.set_pc(v); 20 } else { 8 }, // RET NZ
+            0xC1 => { let v = self.pop(mmu); self.set_bc(v) ; 12}, // POP BC
+            0xC2 => if !self.get_zero_flag() { let v = self.fetch_word(mmu); self.set_pc(v); 16 } else { self.set_pc(self.get_pc().wrapping_add(2)); 12 }, // JP NZ,u16
+            0xC3 => { let v = self.fetch_word(mmu); self.set_pc(v); 16 } // JP u16
+            0xC4 => if !self.get_zero_flag() { let v = self.fetch_word(mmu); self.push(mmu, self.pc); self.set_pc(v); 24 } 
+                    else { self.set_pc(self.get_pc().wrapping_add(2)); 12 } // CALL NZ,u16
+            
+
+            
             
 
 
@@ -543,7 +616,7 @@ impl Processor {
         let mut correction = 0;
         let mut newCarry = false;
 
-        if self.get_half_flag() || (!self.get_neg_flag() && ((a & 0xf) > 0x9)) {
+        if self.get_half_flag() || (!self.get_neg_flag() && ((a & 0xF) > 0x9)) {
             correction |= 0x6;
         }
 
@@ -560,6 +633,67 @@ impl Processor {
         self.set_zero_flag(a == 0);
         self.set_a(a)
 
+    }
+
+    fn aul_add_a(&mut self, b: u8, add_carry: bool) {
+        let carry = if add_carry { 1 } else { 0 };
+        let a = self.get_a();
+
+        let res = a.wrapping_add(b).wrapping_add(carry);
+        self.set_zero_flag(res == 0);
+        self.set_neg_flag(false);
+        self.set_carry_flag((a as u16) + (b as u16) + (carry as u16) > 0xFF);
+        self.set_half_flag((a & 0xF) + (b & 0xF) + carry > 0xF);
+
+        self.set_a(res);
+    }
+
+    fn aul_sub_a(&mut self, b: u8, sub_carry: bool) {
+        let carry = if sub_carry { 1 } else { 0 };
+        let a = self.get_a();
+
+        let res = a.wrapping_sub(b).wrapping_sub(carry);
+        self.set_zero_flag(res == 0);
+        self.set_neg_flag(true);
+        self.set_carry_flag((a as u16) < (b as u16) + (carry as u16));
+        self.set_half_flag((a & 0xF) < (b & 0xF) + carry);
+
+        self.set_a(res);
+    }
+
+    fn aul_and_a(&mut self, b: u8) {
+        self.set_a(self.get_a() & b);
+
+        self.set_zero_flag(self.get_a() == 0);
+        self.set_neg_flag(false);
+        self.set_half_flag(true);
+        self.set_carry_flag(true);
+    }
+
+    fn aul_xor_a(&mut self, b: u8) {
+        self.set_a(self.get_a() ^ b);
+
+        self.set_zero_flag(self.get_a() == 0);
+        self.set_neg_flag(false);
+        self.set_half_flag(true);
+        self.set_carry_flag(true);
+    }
+
+    fn aul_or_a(&mut self, b: u8) {
+        self.set_a(self.get_a() | b);
+
+        self.set_zero_flag(self.get_a() == 0);
+        self.set_neg_flag(false);
+        self.set_half_flag(true);
+        self.set_carry_flag(true);
+    }
+
+    fn aul_cp_a(&mut self, b: u8) {
+        let prev_a = self.get_a();
+
+        self.aul_sub_a(b, false);
+
+        self.set_a(prev_a);
     }
 
 
