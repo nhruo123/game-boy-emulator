@@ -1,7 +1,7 @@
 pub const DISPLAY_WIDTH: usize = 160;
 pub const DISPLAY_HIGHT: usize = 144;
 
-#[derive(Clone, PartialEq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Key {
     Right,
     Left,

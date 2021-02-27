@@ -1,5 +1,7 @@
 mod rom_only;
+mod mbc1;
 
+use crate::cartridge_controller::mbc1::Mbc1;
 use crate::mmu::MemWrite;
 use crate::mmu::MemRead;
 use crate::mmu::Mmu;
@@ -9,7 +11,6 @@ use crate::mmu::IoDevice;
 
 const CARTRIDGE_TYPE_ADDER: usize = 0x0147;
 
-const ROM_ONLY_TYPE: u8 = 0x0;
 
 
 const COLOR_BOOT_ROM: &[u8] = {
@@ -52,9 +53,14 @@ impl CartridgeController {
             panic!("bad checksum");
         }
 
-        let cartridge: Box<dyn Cartridge> = match rom[CARTRIDGE_TYPE_ADDER] {
-            ROM_ONLY_TYPE => Box::new(RomOnly::new(rom.clone())),
-            _ => unimplemented!("unimplemented cartridge type"),
+        let cartridge_type = rom[CARTRIDGE_TYPE_ADDER];
+
+        let cartridge: Box<dyn Cartridge> = if RomOnly::probe_cartridge(cartridge_type) {
+            Box::new(RomOnly::new(rom.clone()))
+        } else if Mbc1::probe_cartridge(cartridge_type) {
+            Box::new(Mbc1::new(rom.clone()))
+        } else {
+            unimplemented!("unimplemented cartridge type")
         };
 
         CartridgeController {

@@ -199,8 +199,8 @@ impl Ppu {
                 if self.clock >= VRAM_CLOCK_CYCLES {
                     self.clock -= VRAM_CLOCK_CYCLES;
 
-                    // TODO: call draw
 
+                    self.hardware.borrow_mut().draw_line(self.line as usize, &self.draw_line(mmu));
 
                     if self.status_register.h_blank_int {
                         self.irq.lcd_stat(true);

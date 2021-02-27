@@ -3,6 +3,10 @@ use crate::cartridge_controller::Mmu;
 use crate::cartridge_controller::MemRead;
 use crate::cartridge_controller::Cartridge;
 
+
+const ROM_ONLY_TYPE: u8 = 0x0;
+
+
 pub struct RomOnly {
     rom: Vec<u8>,
 }
@@ -10,6 +14,10 @@ pub struct RomOnly {
 impl RomOnly {
     pub fn new(data: Vec<u8>) -> RomOnly {
         RomOnly { rom: data }
+    }
+
+    pub fn probe_cartridge(code: u8) -> bool {
+        ROM_ONLY_TYPE == code
     }
 }
 
