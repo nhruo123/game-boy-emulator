@@ -1,7 +1,7 @@
 
 use crate::ppu::Mmu;
 use crate::ppu::{ Ppu, PpuMode };
-use crate::utils::{ split_u16, build_u16};
+use crate::utils::{ get_u16_low, get_u16_high, build_u16};
 
 const OAM_DMA_TIME: u32 = 640;
 const G_DMA_TIME: u32 = 640;
@@ -124,10 +124,10 @@ impl DmaManager {
 
     pub fn read_vram_dma(&self, adder: u16) -> u8 {
         match adder {
-            0xFF51 => split_u16(self.vram_dma_target).0,
-            0xFF52 => split_u16(self.vram_dma_target).1,
-            0xFF53 => split_u16(self.vram_dma_source).0,
-            0xFF54 => split_u16(self.vram_dma_source).1,
+            0xFF51 => get_u16_high(self.vram_dma_target),
+            0xFF52 => get_u16_low(self.vram_dma_target),
+            0xFF53 => get_u16_high(self.vram_dma_source),
+            0xFF54 => get_u16_low(self.vram_dma_source),
             0xFF55 => self.vram_dma_len | if self.dma_type == DmaType::None { 0x80 } else { 0 },
             _ => panic!("Dma manager cannot handle adder at {}", adder),
         }
@@ -135,10 +135,10 @@ impl DmaManager {
 
     pub fn write_vram_dma(&mut self, adder: u16, val: u8) {
         match adder {
-            0xFF51 => { let v = split_u16(self.vram_dma_source); self.vram_dma_source = build_u16(val, v.1) },
-            0xFF52 => { let v = split_u16(self.vram_dma_source); self.vram_dma_source = build_u16(v.0, val & 0xF0) },
-            0xFF53 => { let v = split_u16(self.vram_dma_source); self.vram_dma_target = build_u16(val & 0x1F, v.1) },
-            0xFF54 => { let v = split_u16(self.vram_dma_source); self.vram_dma_target = build_u16(v.0, val & 0xF0) },
+            0xFF51 => { self.vram_dma_source = build_u16(val, get_u16_low(self.vram_dma_source)) },
+            0xFF52 => { self.vram_dma_source = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0) },
+            0xFF53 => { self.vram_dma_target = build_u16(val & 0x1F, get_u16_low(self.vram_dma_source)) },
+            0xFF54 => { self.vram_dma_target = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0) },
             0xFF55 => { 
                 self.vram_dma_len = val & 0x7F; 
                 if (val & 0x80) == 0 { self.dma_type == DmaType::Gdma } 

@@ -43,7 +43,7 @@ impl Mmu {
     }
 
     pub fn register_device<T>(&mut self, range: (u16, u16), io_device: Rc<RefCell<T>>) where T: IoDevice + 'static {
-        for i in range.0 .. range.1 {
+        for i in range.0 ..= range.1 {
             if self.memory_mapped_devices.contains_key(&i) {
                 match self.memory_mapped_devices.get_mut(&i) {
                     Some(v) => v.push(io_device.clone()),
@@ -87,6 +87,7 @@ impl Mmu {
 
 
         // no device knows how deal with write do nothing.
+        // dbg!("no device knows how deal with write do nothing");
         return;
     }
 
@@ -95,9 +96,7 @@ impl Mmu {
     }
 
     pub fn write_word(&mut self, adder: u16, value: u16) {
-        let (val_high, val_low) = utils::split_u16(value);
-
-        self.write_byte(adder, val_low);
-        self.write_byte(adder + 1, val_high);
+        self.write_byte(adder, utils::get_u16_low(value));
+        self.write_byte(adder + 1, utils::get_u16_high(value));
     }
 }

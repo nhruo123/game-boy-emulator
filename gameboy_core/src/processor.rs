@@ -139,27 +139,23 @@ impl Processor {
 
     // setters
     pub fn set_af(&mut self, v: u16) {
-        let t = utils::split_u16(v);
-        self.a = t.0;
-        self.f = t.1 & 0xF0;
+        self.a = utils::get_u16_high(v);
+        self.f = utils::get_u16_low(v) & 0xF0;
     }
 
     pub fn set_bc(&mut self, v: u16) {
-        let t = utils::split_u16(v);
-        self.b = t.0;
-        self.c = t.1;
+        self.b = utils::get_u16_high(v);
+        self.c = utils::get_u16_low(v);
     }
 
     pub fn set_de(&mut self, v: u16) {
-        let t = utils::split_u16(v);
-        self.d = t.0;
-        self.e = t.1;
+        self.d = utils::get_u16_high(v);
+        self.e = utils::get_u16_low(v);
     }
 
     pub fn set_hl(&mut self, v: u16) {
-        let t = utils::split_u16(v);
-        self.h = t.0;
-        self.l = t.1;
+        self.h = utils::get_u16_high(v);
+        self.l = utils::get_u16_low(v);
     }
 
     pub fn set_sp(&mut self, v:u16) {
@@ -651,13 +647,13 @@ impl Processor {
             0x47 => { self.alu_bit(self.get_a(), 0); 8 }, // BIT 0 A
 
             0x48 => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 B
-            0x49 => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 C
-            0x4A => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 D
-            0x4B => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 E
-            0x4C => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 H
-            0x4D => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 L
+            0x49 => { self.alu_bit(self.get_c(), 1); 8  }, // BIT 1 C
+            0x4A => { self.alu_bit(self.get_d(), 1); 8  }, // BIT 1 D
+            0x4B => { self.alu_bit(self.get_e(), 1); 8  }, // BIT 1 E
+            0x4C => { self.alu_bit(self.get_h(), 1); 8  }, // BIT 1 H
+            0x4D => { self.alu_bit(self.get_l(), 1); 8  }, // BIT 1 L
             0x4E => { self.alu_bit(mmu.read_byte(self.get_hl()), 1); 16 }, // BIT 1 (HL)
-            0x4F => { self.alu_bit(self.get_b(), 1); 8  }, // BIT 1 A
+            0x4F => { self.alu_bit(self.get_a(), 1); 8  }, // BIT 1 A
 
             0x50 => { self.alu_bit(self.get_b(), 2); 8 }, // BIT 2 B
             0x51 => { self.alu_bit(self.get_c(), 2); 8 }, // BIT 2 C
@@ -669,13 +665,13 @@ impl Processor {
             0x57 => { self.alu_bit(self.get_a(), 2); 8 }, // BIT 2 A
 
             0x58 => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 B
-            0x59 => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 C
-            0x5A => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 D
-            0x5B => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 E
-            0x5C => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 H
-            0x5D => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 L
+            0x59 => { self.alu_bit(self.get_c(), 3); 8  }, // BIT 3 C
+            0x5A => { self.alu_bit(self.get_d(), 3); 8  }, // BIT 3 D
+            0x5B => { self.alu_bit(self.get_e(), 3); 8  }, // BIT 3 E
+            0x5C => { self.alu_bit(self.get_h(), 3); 8  }, // BIT 3 H
+            0x5D => { self.alu_bit(self.get_l(), 3); 8  }, // BIT 3 L
             0x5E => { self.alu_bit(mmu.read_byte(self.get_hl()), 3); 16 }, // BIT 3 (HL)
-            0x5F => { self.alu_bit(self.get_b(), 3); 8  }, // BIT 3 A
+            0x5F => { self.alu_bit(self.get_a(), 3); 8  }, // BIT 3 A
 
             0x60 => { self.alu_bit(self.get_b(), 4); 8 }, // BIT 4 B
             0x61 => { self.alu_bit(self.get_c(), 4); 8 }, // BIT 4 C
@@ -687,13 +683,13 @@ impl Processor {
             0x67 => { self.alu_bit(self.get_a(), 4); 8 }, // BIT 4 A
 
             0x68 => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 B
-            0x69 => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 C
-            0x6A => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 D
-            0x6B => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 E
-            0x6C => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 H
-            0x6D => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 L
+            0x69 => { self.alu_bit(self.get_c(), 5); 8  }, // BIT 5 C
+            0x6A => { self.alu_bit(self.get_d(), 5); 8  }, // BIT 5 D
+            0x6B => { self.alu_bit(self.get_e(), 5); 8  }, // BIT 5 E
+            0x6C => { self.alu_bit(self.get_h(), 5); 8  }, // BIT 5 H
+            0x6D => { self.alu_bit(self.get_l(), 5); 8  }, // BIT 5 L
             0x6E => { self.alu_bit(mmu.read_byte(self.get_hl()), 5); 16 }, // BIT 5 (HL)
-            0x6F => { self.alu_bit(self.get_b(), 5); 8  }, // BIT 5 A
+            0x6F => { self.alu_bit(self.get_a(), 5); 8  }, // BIT 5 A
 
             0x70 => { self.alu_bit(self.get_b(), 6); 8 }, // BIT 6 B
             0x71 => { self.alu_bit(self.get_c(), 6); 8 }, // BIT 6 C
@@ -705,13 +701,13 @@ impl Processor {
             0x77 => { self.alu_bit(self.get_a(), 6); 8 }, // BIT 6 A
 
             0x78 => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 B
-            0x79 => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 C
-            0x7A => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 D
-            0x7B => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 E
-            0x7C => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 H
-            0x7D => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 L
+            0x79 => { self.alu_bit(self.get_c(), 7); 8 }, // BIT 7 C
+            0x7A => { self.alu_bit(self.get_d(), 7); 8 }, // BIT 7 D
+            0x7B => { self.alu_bit(self.get_e(), 7); 8 }, // BIT 7 E
+            0x7C => { self.alu_bit(self.get_h(), 7); 8 }, // BIT 7 H
+            0x7D => { self.alu_bit(self.get_l(), 7); 8 }, // BIT 7 L
             0x7E => { self.alu_bit(mmu.read_byte(self.get_hl()), 7); 16 }, // BIT 7 (HL)
-            0x7F => { self.alu_bit(self.get_b(), 7); 8 }, // BIT 7 A
+            0x7F => { self.alu_bit(self.get_a(), 7); 8 }, // BIT 7 A
 
             0x80 => { self.set_b(self.alu_res(self.get_b(), 0)); 8 }, // RES 0 B
             0x81 => { self.set_c(self.alu_res(self.get_c(), 0)); 8 }, // RES 0 C
@@ -1108,7 +1104,7 @@ impl Processor {
     fn jump_relative(&mut self, mmu: &mut Mmu) {
         let n = self.fetch_byte(mmu) as i8;
 
-        self.set_sp(self.get_pc().wrapping_add(n as u16));
+        self.set_pc(self.get_pc().wrapping_add(n as u16));
     }
 
 }
