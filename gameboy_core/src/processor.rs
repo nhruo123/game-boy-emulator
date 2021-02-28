@@ -226,7 +226,7 @@ impl Processor {
 
 
     pub fn push(&mut self, mmu: &mut Mmu, v: u16) {
-        self.set_pc(self.get_sp().wrapping_sub(2));
+        self.set_sp(self.get_sp().wrapping_sub(2));
 
         mmu.write_word(self.get_sp(), v);
     }
@@ -234,7 +234,7 @@ impl Processor {
     pub fn pop(&mut self, mmu: &mut Mmu) -> u16 {
         let val = mmu.read_word(self.get_sp());
 
-        self.set_pc(self.get_sp().wrapping_add(2));
+        self.set_sp(self.get_sp().wrapping_add(2));
 
         val
     }
@@ -954,7 +954,7 @@ impl Processor {
     fn alu_daa(&mut self) {
         let mut a = self.get_a();
         let mut correction = 0;
-        let mut newCarry = false;
+        let mut new_carry = false;
 
         if self.get_half_flag() || (!self.get_neg_flag() && ((a & 0xF) > 0x9)) {
             correction |= 0x6;
@@ -962,13 +962,13 @@ impl Processor {
 
         if self.get_carry_flag() || (!self.get_neg_flag() && a > 0x99) {
             correction |= 0x60;
-            newCarry = self.get_carry_flag();
+            new_carry = self.get_carry_flag();
         }
 
 
         a = if self.get_neg_flag() { a.wrapping_sub(correction) } else { a.wrapping_add(correction) };
 
-        self.set_carry_flag(newCarry);
+        self.set_carry_flag(new_carry);
         self.set_half_flag(false);
         self.set_zero_flag(a == 0);
         self.set_a(a)

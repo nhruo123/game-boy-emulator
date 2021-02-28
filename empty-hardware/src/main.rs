@@ -9,7 +9,8 @@ fn main() {
     let hardware_clone = hardware.clone();
 
     std::thread::spawn(move || {
-        let rom = std::fs::read("E:\\projects\\game-boy-emulator\\roms\\cpu_instrs.gb").unwrap();
+        // let rom = std::fs::read("E:\\projects\\game-boy-emulator\\roms\\cpu_instrs.gb").unwrap();
+        let rom = vec![0; 0x1000];
         emulator::run(rom , Box::new(hardware_clone) , emulator::EmulatorConfig { allow_bad_checksum: true, game_boy_mode: emulator::GameBoyMode::Classic })
     });
 

@@ -8,8 +8,6 @@ use std::sync::{
     Arc, Mutex,
 };
 
-struct Empty;
-
 #[derive(Clone)]
 pub struct Hardware {
     screen_buffer: Arc<Mutex<Vec<u32>>>,

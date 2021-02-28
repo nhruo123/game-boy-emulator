@@ -106,20 +106,13 @@ impl DmaManager {
         }
     }
 
-    pub fn pending_dma(&self) -> bool {
-        self.dma_type != DmaType::None && !self.pending_hdma()
-    }
-
-    pub fn pending_hdma(&self) -> bool {
-        self.dma_type == DmaType::Hdma
-    }
-
     pub fn read_oam(&self) -> u8 {
         0
     }
 
     pub fn write_oam(&mut self, val: u8) {
         self.oma_base_adder = val;
+        self.dma_type = DmaType::Oma;
     }
 
     pub fn read_vram_dma(&self, adder: u16) -> u8 {

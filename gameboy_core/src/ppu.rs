@@ -5,6 +5,7 @@ mod color;
 mod dma;
 mod sprite;
 
+use crate::utils::build_u16;
 use crate::emulator::GameBoyMode;
 use crate::hardware::{ DISPLAY_WIDTH, DISPLAY_HIGHT };
 use std::cell::RefCell;
@@ -28,6 +29,9 @@ const VRAM_CLOCK_CYCLES: u32 = 172;
 
 const VRAM_BANK_SIZE: usize = 0x2000;
 const VRAM_BANK_COUNT: usize = 0x2;
+
+const OMA_TABLE_SIZE: usize = 0xA0;
+const OMA_TABLE_ADDER: u16 = 0xFE00;
 
 #[derive(PartialEq, Copy, Clone)]
 enum BackGroundColorPriority {
@@ -82,6 +86,7 @@ pub struct Ppu {
 
     selected_vram_bank: usize,
     vram: Vec<Vec<u8>>,
+    oma_table: Vec<u8>,
 
     line: u8,
     line_compare: u8,
@@ -116,7 +121,8 @@ impl Ppu {
             clock: 0,
             dma_manager: DmaManager::new(),
             selected_vram_bank: 0,
-            vram: vec![vec![0 ;VRAM_BANK_SIZE]; VRAM_BANK_SIZE],
+            vram: vec![vec![0; VRAM_BANK_SIZE]; VRAM_BANK_COUNT],
+            oma_table: vec![0; OMA_TABLE_SIZE],
             line: 0,
             line_compare: 0,
 
@@ -259,6 +265,18 @@ impl Ppu {
     }
 
 
+    fn get_tile_color(&self, tile_adder_base: u16, x_offset: u16, y_offset: u16, bank: usize) -> usize {
+        let l = self.read_from_vram(bank, tile_adder_base + (y_offset * 2));
+        let h = self.read_from_vram(bank, tile_adder_base + (y_offset * 2)  + 1);
+
+        let mask = 1 >> (7 - x_offset);
+        
+        let l = l & mask;
+        let h = (h & mask) << 1;
+
+        build_u16(h, l) as usize
+    }
+
     fn draw_background_and_window_line(&self) -> Vec<(Color, BackGroundColorPriority)> {
         let mut line_vector: Vec<(Color, BackGroundColorPriority)> = vec![(Color::new(), BackGroundColorPriority::NormalPriority); DISPLAY_WIDTH];
 
@@ -285,47 +303,31 @@ impl Ppu {
                 continue;
             };
 
+            let attributes = if self.game_boy_mode == GameBoyMode::Color {
+                let attributes_val = self.read_from_vram(1, tile_index_adder_base + ((tile_y / 8) * 32) + (tile_x / 8));
+                Attributes::new(attributes_val, &self.bg_color_palette)
+            } else {
+                Attributes::normal_gameboy_attributes(&self.bg_mono_palette)
+            };
+
+
             let tile_index = self.read_from_vram(0, tile_index_adder_base + ((tile_y / 8) * 32) + (tile_x / 8));
 
-            let maybe_attributes = if self.game_boy_mode == GameBoyMode::Color {
-                let attributes_val = self.read_from_vram(1, tile_index_adder_base + ((tile_y / 8) * 32) + (tile_x / 8));
-                Some(Attributes::new(attributes_val, &self.bg_color_palette))
+
+            let tile_adder = if self.control_register.get_bg_tile_base_adder() == 0x8000 {
+                self.control_register.get_bg_tile_base_adder() + (tile_index as u16 * 16)
             } else {
-                None
+                (self.control_register.get_bg_tile_base_adder() + 0x800).wrapping_add((tile_index * 16) as u16)
             };
 
 
-            let tile_adder = self.control_register.get_bg_tile_adder() + (tile_index as u16 * 16);
+            let y_offset = if attributes.y_flip { 7 - (tile_y % 8) } else { tile_y % 8 };
+            let x_offset = if attributes.x_flip { 7 - (tile_x % 8) } else { tile_x % 8 };
 
-            let tile_line_byte = tile_adder + match maybe_attributes {
-                Some(attribute) if attribute.y_flip => 14 - (win_y % 8) * 2 ,
-                _ => (win_y % 8) * 2,
-                
-            } as u16;
-
-            
-            let (tile_byte_0, tile_byte_1) = match maybe_attributes {
-                Some(attribute) => (self.read_from_vram(attribute.vram_bank, tile_line_byte), self.read_from_vram(attribute.vram_bank, tile_line_byte + 1)),
-                None => (self.read_from_vram(0, tile_line_byte), self.read_from_vram(0, tile_line_byte + 1)),
-            };
-
-            let color_musk =  1 <<  match maybe_attributes {
-                Some(attribute) if attribute.x_flip => (x_index % 8),
-                _ => 7 - (x_index % 8),
-            };
-
-            let color_index = 
-                if color_musk & tile_byte_0 != 0 { 1 } else { 0 } | 
-                if color_musk & tile_byte_1 != 0 { 2 } else { 0 };
-
-
-            let atter_prio = match maybe_attributes {
-                Some(attribute) if attribute.priority => true,
-                _ => false,
-            }; 
+            let color_index = self.get_tile_color(tile_adder, x_offset, y_offset, attributes.vram_bank);
 
             let bg_prio = if color_index == 0 { BackGroundColorPriority::ColorZero } 
-                else if atter_prio { BackGroundColorPriority::HighPriority } 
+                else if attributes.priority { BackGroundColorPriority::HighPriority } 
                 else { BackGroundColorPriority::NormalPriority };
 
             if self.game_boy_mode == GameBoyMode::Color {
@@ -374,7 +376,7 @@ impl Ppu {
             };
 
             // Every tile is 16 bytes of mem and eve1ry line is 2 bytes aka 8 bytes
-            let tile_adder = 0x8000u16 + (sprite.tile_index * 16) + (tile_y * 2);
+            let tile_adder = OMA_TABLE_ADDER + (sprite.tile_index * 16) + (tile_y * 2);
 
             let (tile_byte_0, tile_byte_1) = if self.game_boy_mode == GameBoyMode::Color {
                 (self.read_from_vram(sprite.attributes.vram_bank, tile_adder),
@@ -422,7 +424,7 @@ impl IoDevice for Ppu {
     fn read_byte(&mut self, _mmu: &Mmu, adder: u16) -> MemRead { 
         match adder {
             0x8000 ..= 0x9FFF => MemRead::Read(self.read_from_vram(self.selected_vram_bank, adder)),
-
+            0xFE00 ..= 0xFE9F => MemRead::Read(self.oma_table[adder as usize - 0xFE00]),
             0xFF40 => MemRead::Read(self.control_register.get()),
             0xFF41 => MemRead::Read(self.status_register.get()),
             0xFF42 => MemRead::Read(self.y_scroll),
@@ -454,7 +456,7 @@ impl IoDevice for Ppu {
     fn write_byte(&mut self, _mmu: &Mmu, adder: u16, val: u8) -> MemWrite { 
         match adder {
             0x8000 ..= 0x9FFF => { (self.write_to_vram(self.selected_vram_bank, adder, val)); MemWrite::Write },
-
+            0xFE00 ..= 0xFE9F => { self.oma_table[adder as usize - 0xFE00] = val; MemWrite::Write },
             0xFF40 => { self.control_register.set(val); MemWrite::Write },
             0xFF41 => { self.status_register.set(val); MemWrite::Write },
             0xFF42 => { self.y_scroll = val; MemWrite::Write },

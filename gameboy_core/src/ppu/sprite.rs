@@ -1,3 +1,4 @@
+use crate::ppu::MonoColorPalette;
 use crate::ppu::Mmu;
 use crate::ppu::ColorPalette;
 use crate::ppu::Color;
@@ -23,6 +24,17 @@ impl<'a> Attributes<'a> {
             x_flip: (val & 0x20) != 0,
             y_flip: (val & 0x40) != 0,
             priority: (val & 0x80) != 0,
+        }
+    }
+
+    pub fn normal_gameboy_attributes(mono_color_palette: &'a MonoColorPalette) ->  Attributes<'a> {
+        Attributes {
+            palette: mono_color_palette.get_color_array(),
+            vram_bank: 0,
+            palette_number: 0,
+            x_flip: false,
+            y_flip: false,
+            priority: false,
         }
     }
 }

@@ -1,4 +1,5 @@
 
+use crate::ram::Ram;
 use crate::joypad::Joypad;
 use crate::cartridge_controller::CartridgeController;
 use crate::timer::Timer;
@@ -43,6 +44,7 @@ impl Emulator {
         let irq = ic.borrow().get_requester();
         let cartridge_controller = Rc::new(RefCell::new(CartridgeController::new(rom, emulator_config.game_boy_mode, emulator_config.allow_bad_checksum)));
         let joypad = Rc::new(RefCell::new(Joypad::new(Rc::clone(&hw), irq.clone())));
+        let ram = Rc::new(RefCell::new(Ram::new()));
 
         let processor = Processor::new();
         let mut mmu = Mmu::new();
@@ -62,6 +64,12 @@ impl Emulator {
         mmu.register_device((0xffff, 0xffff), Rc::clone(&ic));
         mmu.register_device((0xff00, 0xff00), Rc::clone(&joypad));
         mmu.register_device((0xff04, 0xff07), Rc::clone(&timer));
+
+        mmu.register_device((0xC000, 0xCFFF), Rc::clone(&ram));
+        mmu.register_device((0xD000, 0xDFFF), Rc::clone(&ram));
+        mmu.register_device((0xE000, 0xFDFF), Rc::clone(&ram));
+        mmu.register_device((0xFF70, 0xFF70), Rc::clone(&ram));
+        mmu.register_device((0xFF80, 0xFFFE), Rc::clone(&ram));
 
         Emulator {
             hw,

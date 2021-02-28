@@ -5,14 +5,22 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(Windows) Launch",
-            "type": "cppvsdbg",
+            "type": "lldb",
             "request": "launch",
-            "program": "${workspaceRoot}/target/debug/empty-hardware.exe",
+            "name": "Debug executable 'empty-hardware'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=empty-hardware",
+                    "--package=empty-hardware"
+                ],
+                "filter": {
+                    "name": "empty-hardware",
+                    "kind": "bin"
+                }
+            },
             "args": [],
-            "stopAtEntry": false,
-            "cwd": "${workspaceRoot}",
-            "environment": [],
+            "cwd": "${workspaceFolder}"
         },
     ]
 }

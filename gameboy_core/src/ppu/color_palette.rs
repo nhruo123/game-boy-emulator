@@ -1,7 +1,7 @@
 use crate::ppu::color::Color;
 
 pub struct MonoColorPalette {
-    colors: (Color, Color, Color, Color)
+    colors: Vec<Color>
 }
 
 impl MonoColorPalette {
@@ -9,31 +9,35 @@ impl MonoColorPalette {
 
     pub fn new() -> MonoColorPalette {
         MonoColorPalette {
-            colors: (Color::White, Color::LightGray, Color::DarkGray, Color::Black)
+            colors: vec!(Color::White, Color::LightGray, Color::DarkGray, Color::Black)
         }
     }
 
     pub fn read(&self) -> u8 {
-        self.colors.0.monochrome_color_to_u8() | 
-        (self.colors.1.monochrome_color_to_u8() << 2) | 
-        (self.colors.2.monochrome_color_to_u8() << 4) | 
-        (self.colors.3.monochrome_color_to_u8() << 6)    
+        self.colors[0].monochrome_color_to_u8() | 
+        (self.colors[1].monochrome_color_to_u8() << 2) | 
+        (self.colors[2].monochrome_color_to_u8() << 4) | 
+        (self.colors[3].monochrome_color_to_u8() << 6)    
     }
 
     pub fn write(&mut self, val: u8) {
-        self.colors.0 = Color::u8_to_monochrome(val & 0x3);
-        self.colors.1 = Color::u8_to_monochrome((val << 2) & 0x3);
-        self.colors.2 = Color::u8_to_monochrome((val << 4) & 0x3);
-        self.colors.3 = Color::u8_to_monochrome((val << 6) & 0x3);
+        self.colors[0] = Color::u8_to_monochrome(val & 0x3);
+        self.colors[1] = Color::u8_to_monochrome((val >> 2) & 0x3);
+        self.colors[2] = Color::u8_to_monochrome((val >> 4) & 0x3);
+        self.colors[3] = Color::u8_to_monochrome((val >> 6) & 0x3);
     }
 
     pub fn get_color(&self, index: usize) -> Color {
         match index {
-            0 => self.colors.0,
-            1 => self.colors.1,
-            2 => self.colors.2,
-            _ => self.colors.3,
+            0 => self.colors[0],
+            1 => self.colors[1],
+            2 => self.colors[2],
+            _ => self.colors[3],
         }
+    }
+
+    pub fn get_color_array(&self) -> &Vec<Color>  {
+        &self.colors
     }
 }
 pub struct ColorPalette {
