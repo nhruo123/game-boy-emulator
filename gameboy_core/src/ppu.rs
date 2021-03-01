@@ -284,7 +284,7 @@ impl Ppu {
         let mut line_vector: Vec<(Color, BackGroundColorPriority)> = vec![(Color::new(), BackGroundColorPriority::NormalPriority); DISPLAY_WIDTH];
 
         let draw_bg = self.game_boy_mode == GameBoyMode::Color || self.control_register.bg_and_win_display;
-        let draw_win = self.control_register.window_display_enabled || (self.game_boy_mode != GameBoyMode::Color && self.control_register.bg_and_win_display);
+        let draw_win = self.control_register.window_display_enabled && (self.game_boy_mode != GameBoyMode::Color && self.control_register.bg_and_win_display);
 
         if !draw_bg && !draw_win {
             return line_vector;
