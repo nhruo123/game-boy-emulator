@@ -93,6 +93,8 @@ impl Emulator {
         self.timer.borrow_mut().cycle(clock);
         self.joypad.borrow_mut().poll();
 
+        // std::thread::sleep(std::time::Duration::from_micros(1));
+
         // TODO add sleep for the clock cycle the cpu did.
 
     }

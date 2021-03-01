@@ -33,6 +33,8 @@ const VRAM_BANK_COUNT: usize = 0x2;
 const OMA_TABLE_SIZE: usize = 0xA0;
 const OMA_TABLE_ADDER: u16 = 0xFE00;
 
+
+
 #[derive(PartialEq, Copy, Clone)]
 enum BackGroundColorPriority {
     ColorZero,
@@ -269,12 +271,13 @@ impl Ppu {
         let l = self.read_from_vram(bank, tile_adder_base + (y_offset * 2));
         let h = self.read_from_vram(bank, tile_adder_base + (y_offset * 2)  + 1);
 
-        let mask = 1 >> (7 - x_offset);
+        let mask = 1 << (7 - x_offset);
         
-        let l = l & mask;
-        let h = (h & mask) << 1;
+        let l = if (l & mask) != 0 { 1 } else { 0 };
+        let h = if (h & mask) != 0 { 2 } else { 0 };
 
-        build_u16(h, l) as usize
+        (h | l) as usize
+
     }
 
     fn draw_background_and_window_line(&self) -> Vec<(Color, BackGroundColorPriority)> {
@@ -286,32 +289,34 @@ impl Ppu {
         if !draw_bg && !draw_win {
             return line_vector;
         }
-
-        let win_y = self.line as i32 - self.window_y_pos as i32;
-
-        let bg_y = self.line.wrapping_add(self.y_scroll);
-
         for x_index in 0..DISPLAY_WIDTH {
-            let win_x = x_index as i32 - (self.window_x_pos as i32 - 7);
-            let bg_x = self.x_scroll.wrapping_add(x_index as u8);
 
-            let (tile_index_adder_base, tile_y, tile_x) = if draw_win && win_y >= 0 &&  win_x >= 0 {
-                (self.control_register.get_window_tile_index_adder(), win_y as u16, win_x as u16)
+            let (tile_map_base_adder, tile_y, tile_x, y_offset, x_offset) = 
+            if draw_win && (self.line >= self.window_y_pos) &&  (x_index as u16 + 7  >= self.window_x_pos as u16 ) {
+                let y = (self.line - self.window_y_pos) as u16;
+                let x = x_index as u16 + 7 - (self.window_x_pos as u16); // x - (win - 7) I get sub overflow
+
+                (self.control_register.get_window_tile_index_adder(), y / 8 , x / 8, y % 8, x % 8)
             } else if draw_bg {
-                (self.control_register.get_bg_tile_index_adder(), bg_y as u16, bg_x as u16)
+                let y = (self.line as u16 + self.y_scroll as u16) % 256;
+                let x = (x_index as u16 + self.x_scroll as u16) % 256;
+
+                (self.control_register.get_bg_tile_index_adder(), y / 8, x / 8, y % 8, x % 8)
             } else {
                 continue;
             };
 
+            let tile_map_adder = tile_map_base_adder + (tile_y * 32) + tile_x;
+
             let attributes = if self.game_boy_mode == GameBoyMode::Color {
-                let attributes_val = self.read_from_vram(1, tile_index_adder_base + ((tile_y / 8) * 32) + (tile_x / 8));
+                let attributes_val = self.read_from_vram(1, tile_map_adder);
                 Attributes::new(attributes_val, &self.bg_color_palette)
             } else {
                 Attributes::normal_gameboy_attributes(&self.bg_mono_palette)
             };
 
 
-            let tile_index = self.read_from_vram(0, tile_index_adder_base + ((tile_y / 8) * 32) + (tile_x / 8));
+            let tile_index = self.read_from_vram(0, tile_map_adder);
 
 
             let tile_adder = if self.control_register.get_bg_tile_base_adder() == 0x8000 {
@@ -321,24 +326,41 @@ impl Ppu {
             };
 
 
-            let y_offset = if attributes.y_flip { 7 - (tile_y % 8) } else { tile_y % 8 };
-            let x_offset = if attributes.x_flip { 7 - (tile_x % 8) } else { tile_x % 8 };
+            let y_offset = if attributes.y_flip { 7 - y_offset } else { y_offset };
+            let x_offset = if attributes.x_flip { 7 - x_offset } else { x_offset };
 
             let color_index = self.get_tile_color(tile_adder, x_offset, y_offset, attributes.vram_bank);
 
             let bg_prio = if color_index == 0 { BackGroundColorPriority::ColorZero } 
-                else if attributes.priority { BackGroundColorPriority::HighPriority } 
-                else { BackGroundColorPriority::NormalPriority };
+            else if attributes.priority { BackGroundColorPriority::HighPriority } 
+            else { BackGroundColorPriority::NormalPriority };
 
-            if self.game_boy_mode == GameBoyMode::Color {
-                let color = self.bg_color_palette.get_color(color_index);
+            // if color_index != 0 {
+            //     for tile_index in 0..384 {
+            //         let adder = 0x8000 + 16 * tile_index;
 
-                line_vector[(x_index) as usize] = (color, bg_prio)
-            } else {
-                let color = self.bg_mono_palette.get_color(color_index);
+            //         let l = self.read_from_vram(attributes.vram_bank, adder);
+            //         let h = self.read_from_vram(attributes.vram_bank, adder + 1);
 
-                line_vector[(x_index) as usize] = (color, bg_prio)
-            }
+            //         let title_data: u16 = ((h as u16) << 8) | (l as u16);
+
+            //         println!("title data is: {:#X} at index {}", title_data, tile_index);
+            //     }
+            // }
+
+            // if color_index != 0 {
+            //     for bg_adder in 0x9800..0x9BFF {
+            //         let val = self.read_from_vram(0, bg_adder);
+
+            //         println!("title data is: {} at index {}", val, bg_adder - 0x9800);
+            //     }
+            // }
+
+
+
+
+            let color = attributes.palette[color_index];
+            line_vector[(x_index) as usize] = (color, bg_prio);
         }
 
         line_vector
@@ -355,13 +377,8 @@ impl Ppu {
 
         let line = self.line as i32;
 
-        // let mut sprite_counter = 0;
 
         for sprite_index in 0..40 {
-
-            // if sprite_counter > 10 {
-            //     break;
-            // }
 
             let sprite = Sprite::new(sprite_index, self.control_register.sprite_size, mmu, &self.object_color_palette);
 
@@ -376,7 +393,7 @@ impl Ppu {
             };
 
             // Every tile is 16 bytes of mem and eve1ry line is 2 bytes aka 8 bytes
-            let tile_adder = OMA_TABLE_ADDER + (sprite.tile_index * 16) + (tile_y * 2);
+            let tile_adder = 0x8000 + (sprite.tile_index * 16) + (tile_y * 2);
 
             let (tile_byte_0, tile_byte_1) = if self.game_boy_mode == GameBoyMode::Color {
                 (self.read_from_vram(sprite.attributes.vram_bank, tile_adder),
@@ -410,7 +427,6 @@ impl Ppu {
                     line_vector[(x_index as i32 + sprite.x) as usize] = Some((color, sprite.attributes.priority))
                 }
 
-                // sprite_counter += 1;
             }
         }
         

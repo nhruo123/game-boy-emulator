@@ -15,7 +15,7 @@ impl Ram {
     pub fn new() -> Ram {
         Ram {
             selected_wram: 1,
-            wram_banks: (0..WRAM_BANK_SIZE).map(|_| vec![0; WRAM_BANK_COUNT]).collect(),
+            wram_banks: (0..WRAM_BANK_COUNT).map(|_| vec![0; WRAM_BANK_SIZE]).collect(),
             zero_ram_page: vec![0; ZERO_PAGE_SIZE],
         }
     }

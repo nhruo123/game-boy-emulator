@@ -349,12 +349,12 @@ impl Processor {
             0x27 => { self.alu_daa(); 4 }, // DAA
             0x28 => if self.get_zero_flag() { self.jump_relative(mmu); 12} else { self.set_pc(self.get_pc() + 1); 8 }, // JR Z,i8
             0x29 => { let v = self.alu_add_16b(self.get_hl(), self.get_hl()); self.set_hl(v); 8 }, // ADD HL,HL
-            0x2A => { let v = self.get_hl(); self.set_hl(v.wrapping_add(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD (HL+),A
+            0x2A => { let v = self.get_hl(); self.set_hl(v.wrapping_add(1)); self.set_a(mmu.read_byte(v)); 8 }, // LD A,(HL+)
             0x2B => { self.set_hl(self.get_hl().wrapping_add(1)) ; 8 }, // DEC HL
             0x2C => { let v = self.alu_inc(self.get_l()); self.set_l(v); 4 }, // INC L
             0x2D => { let v = self.alu_dec(self.get_l()); self.set_l(v); 4 }, // DEC L
             0x2E => { let v = self.fetch_byte(mmu); self.set_l(v); 8 }, // LD L,u8
-            0x2F => { self.set_a(!self.get_a()); self.set_half_flag(true); self.set_neg_flag(true); 4 }, // LD L,u8
+            0x2F => { self.set_a(!self.get_a()); self.set_half_flag(true); self.set_neg_flag(true); 4 }, // CPL
             0x30 => if !self.get_carry_flag() { self.jump_relative(mmu); 12 } else { self.set_pc(self.get_pc() + 1); 8 }, // JR NC,i8
             0x31 => { let v = self.fetch_word(mmu); self.set_sp(v); 12 }, // LD SP,u16
             0x32 => { let v = self.get_hl(); self.set_hl(v.wrapping_sub(1)); mmu.write_byte(v, self.get_a()); 8 }, // LD (HL-),A
@@ -534,13 +534,13 @@ impl Processor {
             0xDF => { self.push(mmu, self.get_pc()); self.set_pc(0x18); 16 } // RST 18h
             0xE0 => { let v = self.fetch_byte(mmu); mmu.write_byte(0xFF00 | v as u16, self.get_a()); 12 }, // LD (FF00+u8),A
             0xE1 => { let v = self.pop(mmu); self.set_hl(v) ; 12}, // POP HL
-            0xE2 => { mmu.write_byte(0xFF00 + self.get_c() as u16, self.get_a()); 8 }, // LD (FF00+c),A
+            0xE2 => { mmu.write_byte(0xFF00 | (self.get_c() as u16), self.get_a()); 8 }, // LD (FF00+c),A
             0xE5 => { self.push(mmu, self.get_hl()); 16 } // PUSH HL
             0xE6 => { let v = self.fetch_byte(mmu); self.alu_and_a(v); 8 } // AND A,u8
             0xE7 => { self.push(mmu, self.get_pc()); self.set_pc(0x20); 16 } // RST 20h
             0xE8 => { let nb = self.fetch_byte(mmu); let v = self.alu_add_16b(self.get_sp(), nb as u16); self.set_sp(v); self.set_zero_flag(false); 16 }, // ADD SP,i8
             0xE9 => { self.set_pc(self.get_hl()) ; 4 }, // JP HL
-            0xEA => { let v = self.fetch_word(mmu); mmu.write_byte(v, self.get_a()); 8 }, // LD (u16),SP
+            0xEA => { let v = self.fetch_word(mmu); mmu.write_byte(v, self.get_a()); 8 }, // LD (u16),A 
             0xEE => { let v = self.fetch_byte(mmu); self.alu_xor_a(v); 8 } // XOR A,u8
             0xEF => { self.push(mmu, self.get_pc()); self.set_pc(0x28); 16 } // RST 28h
             0xF0 => { let v = self.fetch_byte(mmu); self.set_a(mmu.read_byte(0xFF00 | v as u16)); 12 }, // LD A,(FF00+u8)
@@ -881,6 +881,7 @@ impl Processor {
 
     fn alu_dec(&mut self, val: u8) -> u8 {
         self.set_half_flag((val & 0x0F) == 0);
+
         let val = val.wrapping_sub(1);
 
         self.set_zero_flag(val == 0);
@@ -894,7 +895,7 @@ impl Processor {
 
         self.set_neg_flag(false);
         self.set_half_flag(false);
-        self.set_zero_flag(false);
+        
 
         self.set_carry_flag(last_bit_was_on);
 
@@ -904,6 +905,7 @@ impl Processor {
             val |= 0x1;
         }
 
+        self.set_zero_flag(val == 0);
 
         val
     }
@@ -932,9 +934,10 @@ impl Processor {
         self.set_carry_flag(val & 0x80 != 0);
         let val = (val << 1) | if prev_carry { 1 } else { 0 };
 
+        self.set_zero_flag(val == 0);
+
         self.set_neg_flag(false);
         self.set_half_flag(false);
-        self.set_zero_flag(false);
 
         val
     }
@@ -946,7 +949,7 @@ impl Processor {
 
         self.set_neg_flag(false);
         self.set_half_flag(false);
-        self.set_zero_flag(false);
+        self.set_zero_flag(val == 0);
 
         val
     }
@@ -993,6 +996,7 @@ impl Processor {
         let a = self.get_a();
 
         let res = a.wrapping_sub(b).wrapping_sub(carry);
+        
         self.set_zero_flag(res == 0);
         self.set_neg_flag(true);
         self.set_carry_flag((a as u16) < (b as u16) + (carry as u16));
@@ -1024,8 +1028,8 @@ impl Processor {
 
         self.set_zero_flag(self.get_a() == 0);
         self.set_neg_flag(false);
-        self.set_half_flag(true);
-        self.set_carry_flag(true);
+        self.set_half_flag(false);
+        self.set_carry_flag(false);
     }
 
     fn alu_cp_a(&mut self, b: u8) {
