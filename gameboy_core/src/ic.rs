@@ -7,7 +7,7 @@ use std::rc::Rc;
 pub const V_BLANK_INT: u8 = 0x40;
 pub const LCD_STAT_INT: u8 = 0x48;
 pub const TIMER_INT: u8 = 0x50;
-pub const SERIAL_INT: u8 = 0x48;
+pub const SERIAL_INT: u8 = 0x58;
 pub const JOYPAD_INT: u8 = 0x60;
 
 #[derive(Default)]
@@ -131,7 +131,7 @@ impl Ic {
 
 impl IoDevice for Ic {
     fn read_byte(&mut self, _: &Mmu, adder: u16) -> MemRead {
-        if adder == 0xFFF {
+        if adder == 0xFFFF {
             MemRead::Read(self.enabled.borrow().get())
         } else if adder == 0xFF0F {
             MemRead::Read(self.line.borrow().get())
@@ -141,7 +141,7 @@ impl IoDevice for Ic {
     }
 
     fn write_byte(&mut self, _: &Mmu, adder: u16, val: u8) -> MemWrite { 
-        if adder == 0xFFF {
+        if adder == 0xFFFF {
             self.enabled.borrow_mut().set(val);
             MemWrite::Write
         } else if adder == 0xFF0F {

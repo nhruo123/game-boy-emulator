@@ -107,7 +107,7 @@ impl IoDevice for Timer {
             },
             0xFF07 => {
                 self.timer_enabled = (value & 0x4) != 0;
-                self.timer_speed = u8_to_speed(value & 0x7);
+                self.timer_speed = u8_to_speed(value & 0x3);
 
                 MemWrite::Write
             },
