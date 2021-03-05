@@ -2,17 +2,15 @@ mod hardware;
 
 use gameboy_core::emulator;
 
-use hardware::Hardware;
-
 fn main() {
-    let hardware = Hardware::new();
-    let hardware_clone = hardware.clone();
+
+    let (hw, gui) = hardware::create_app();
 
     std::thread::spawn(move || {
-        let rom = std::fs::read("E:\\projects\\game-boy-emulator\\roms\\11-op a,(hl).gb").unwrap();
+        let rom = std::fs::read("E:\\projects\\game-boy-emulator\\roms\\Tetris (World) (Rev A).gb").unwrap();
         // let rom = vec![0; 0x3FFF];
-        emulator::run(rom , Box::new(hardware_clone) , emulator::EmulatorConfig { allow_bad_checksum: true, game_boy_mode: emulator::GameBoyMode::Classic })
+        emulator::run(rom , Box::new(hw) , emulator::EmulatorConfig { allow_bad_checksum: true, game_boy_mode: emulator::GameBoyMode::Classic })
     });
 
-    hardware.run();
+    gui.run();
 }

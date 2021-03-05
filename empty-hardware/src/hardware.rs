@@ -3,44 +3,69 @@ use minifb::{Scale, Window, WindowOptions};
 use crate::hardware::GameBoyHardware::Key;
 use std::collections::HashMap;
 use gameboy_core::hardware as GameBoyHardware;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
+use std::sync::mpsc;
+use std::sync::mpsc::{ Sender, Receiver };
 
-#[derive(Clone)]
-pub struct Hardware {
-    screen_buffer: Arc<Mutex<Vec<u32>>>,
-    key_state: Arc<Mutex<HashMap<Key, bool>>>,
-    exit: Arc<AtomicBool>,
+pub fn create_app() -> (Hardware, Gui) {
+    let (screen_sender, screen_receiver) = mpsc::channel();
+    let (keys_sender, keys_receiver) = mpsc::channel();
+    let (exit_sender, exit_receiver) = mpsc::channel();
+    
+    let hardware = Hardware::new(screen_sender, keys_receiver, exit_receiver);
+    let gui = Gui::new(screen_receiver, keys_sender, exit_sender);
+
+    (hardware, gui)
 }
 
-struct Gui {
+pub struct Hardware {
+    screen_channel: Sender<(Vec<u32>, usize)>,
+    keys_channel: Receiver<(Key, bool)>,
+    key_state: HashMap<Key, bool>,
+    exit_single: Receiver<bool>,
+}
+
+pub struct Gui {
     window: Window,
-    screen_buffer: Arc<Mutex<Vec<u32>>>,
-    key_state: Arc<Mutex<HashMap<Key, bool>>>,
-    exit: Arc<AtomicBool>,
+    screen_buffer: Vec<u32>,
+    screen_channel: Receiver<(Vec<u32>, usize)>,
+    keys_channel: Sender<(Key, bool)>,
+    key_state: HashMap<Key, bool>,
+    exit_sender: Sender<bool>,
+    exit: bool,
 }
 
 
 impl Gui {
-    fn new (screen_buffer: Arc<Mutex<Vec<u32>>>, key_state: Arc<Mutex<HashMap<Key, bool>>>, exit: Arc<AtomicBool>) -> Self {
+    fn new (screen_channel: Receiver<(Vec<u32>, usize)>, keys_channel: Sender<(Key, bool)>, exit_sender: Sender<bool>) -> Self {
         let window = Window::new("game boy", GameBoyHardware::DISPLAY_WIDTH, GameBoyHardware::DISPLAY_HIGHT, WindowOptions {
             resize: false,
             scale: Scale::X4,
             ..WindowOptions::default()
         }).unwrap();
 
+        let mut key_state = HashMap::new();
+        key_state.insert(Key::Right, false);
+        key_state.insert(Key::Left, false);
+        key_state.insert(Key::Up, false);
+        key_state.insert(Key::Down, false);
+        key_state.insert(Key::A, false);
+        key_state.insert(Key::B, false);
+        key_state.insert(Key::Select, false);
+        key_state.insert(Key::Start, false);
+
         Self {
             window,
+            keys_channel,
+            screen_buffer: vec![0; GameBoyHardware::DISPLAY_WIDTH * GameBoyHardware::DISPLAY_HIGHT],
+            screen_channel,
             key_state,
-            screen_buffer,
-            exit,
+            exit_sender,
+            exit: false,
         }
     }
 
-    fn run(mut self) {
-        while !self.exit.load(Ordering::Relaxed) {
+    pub fn run(mut self) {
+        while !self.exit {
             std::thread::sleep(Duration::from_millis(10));
             self.update_screen();
             self.key_state();
@@ -48,16 +73,30 @@ impl Gui {
     }
 
     fn update_screen(&mut self) {
-        let vram = self.screen_buffer.lock().unwrap().clone();
-        self.window.update_with_buffer(&vram).unwrap();
+        let (vram, line) = match self.screen_channel.try_recv() {
+            Ok(tuple) => tuple,
+            Err(err) => { if err == mpsc::TryRecvError::Disconnected { self.close() }; return; }
+        };
+
+        let base = GameBoyHardware::DISPLAY_WIDTH * line;
+        for i in 0 .. GameBoyHardware::DISPLAY_WIDTH {
+            self.screen_buffer[base + i] = vram[i];
+        }
+
+        self.window.update_with_buffer(&self.screen_buffer).unwrap();
+    }
+
+    fn close(&mut self) {
+        self.exit = true;
+        self.exit_sender.send(true);
     }
 
     fn key_state(&mut self) {
         if !self.window.is_open() {
-            self.exit.store(true, Ordering::Relaxed);
+            self.close();
         }
 
-        for (_, v) in self.key_state.lock().unwrap().iter_mut() {
+        for (_, v) in self.key_state.iter_mut() {
             *v = false;
         }
 
@@ -73,27 +112,29 @@ impl Gui {
                     minifb::Key::Space => Key::Select,
                     minifb::Key::Enter => Key::Start,
                     minifb::Key::Escape => {
-                        self.exit.store(true, Ordering::Relaxed);
+                        self.close();
                         return;
                     }
                     _ => continue,
                 };
 
 
-                match self.key_state.lock().unwrap().get_mut(&gbk) {
+                match self.key_state.get_mut(&gbk) {
                     Some(v) => *v = true,
                     None => unreachable!(),
                 }
             }
+        }
+
+        for (key, value) in self.key_state.iter() {
+            self.keys_channel.send((Clone::clone(key), Clone::clone(value)));
         }
     }
 }
 
 
 impl Hardware {
-    pub fn new() -> Self {
-        let screen_buffer = Arc::new(Mutex::new(vec![0; GameBoyHardware::DISPLAY_WIDTH * GameBoyHardware::DISPLAY_HIGHT]));
-
+    pub fn new(screen_channel: Sender<(Vec<u32>, usize)>, keys_channel: Receiver<(Key, bool)>, exit_single: Receiver<bool>,) -> Self {
 
         let mut key_state = HashMap::new();
         key_state.insert(Key::Right, false);
@@ -104,40 +145,30 @@ impl Hardware {
         key_state.insert(Key::B, false);
         key_state.insert(Key::Select, false);
         key_state.insert(Key::Start, false);
-        let key_state = Arc::new(Mutex::new(key_state));
 
-        let exit = Arc::new(AtomicBool::new(false));
 
         Self {
-            screen_buffer,
+            screen_channel,
+            keys_channel,
             key_state,
-            exit,
+            exit_single,
         }
-    }
-
-    pub fn run(self) {
-        let bg = Gui::new(
-            self.screen_buffer.clone(),
-            self.key_state.clone(),
-            self.exit.clone(),
-        );
-        bg.run();
     }
 }
 
 impl GameBoyHardware::Hardware for Hardware {
     fn draw_line(&mut self, line: usize, buffer: &[(u8, u8, u8)]) {
-        let mut screen_buffer = self.screen_buffer.lock().unwrap();
+        
+        let rgb = buffer.iter().map(|(r,g,b)| {
+            (*b as u32) | ((*g as u32) << 8) | ((*r as u32) << 16) | (0xFFFF << 24)
+        }).collect();
 
-        for i in 0..buffer.len() {
-            let base = line * GameBoyHardware::DISPLAY_WIDTH;
-            let rgb = (buffer[i].2 as u32) | ((buffer[i].1 as u32) << 8) | ((buffer[i].1 as u32) << 16) | (0xFFFF << 24);
-            screen_buffer[base + i] = rgb;
-        }
+
+        self.screen_channel.send((rgb, line));
     }
 
     fn joypad_pressed(&mut self, key: gameboy_core::hardware::Key) -> bool {
-        *self.key_state.lock().unwrap().get_mut(&key).expect("Key err")
+        *self.key_state.get_mut(&key).expect("Key err")
     }
 
     fn clock(&mut self) -> u64 { 
@@ -149,6 +180,9 @@ impl GameBoyHardware::Hardware for Hardware {
     }
 
     fn run(&mut self) -> bool {
-        !self.exit.load(Ordering::Relaxed)
+        match self.exit_single.try_recv() {
+            Ok(b) => !b,
+            Err(err) => err ==  mpsc::TryRecvError::Empty,
+        }
     }
 }
