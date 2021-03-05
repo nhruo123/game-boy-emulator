@@ -322,7 +322,7 @@ impl Ppu {
             let tile_adder = if self.control_register.get_bg_tile_base_adder() == 0x8000 {
                 self.control_register.get_bg_tile_base_adder() + (tile_index as u16 * 16)
             } else {
-                (self.control_register.get_bg_tile_base_adder() + 0x800).wrapping_add((tile_index * 16) as u16)
+                (self.control_register.get_bg_tile_base_adder()).wrapping_add((0x800 + tile_index as i8 as i16 * 16) as u16)
             };
 
 

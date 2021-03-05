@@ -147,3 +147,21 @@ impl Registers {
         }
     }
 }
+
+
+impl std::fmt::Display for Registers {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(
+            f,
+            "PC:[{:04X}] SP:[{:04X}] \
+            A:[{:02X}], F:[{:02X}], B:[{:02X}], C:[{:02X}], \
+            D:[{:02X}], E:[{:02X}], H:[{:02X}], L:[{:02X}], flags:[{}{}{}{}]]",
+            self.pc, self.sp, self.a, self.f, self.b, self.c, self.d, self.e, self.h, self.l,
+            if self.zf() { "z" } else { "_" },
+            if self.nf() { "n" } else { "_" },
+            if self.hf() { "h" } else { "_" },
+            if self.cf() { "c" } else { "_" },
+        )
+    }
+}

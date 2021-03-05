@@ -343,3 +343,10 @@ impl Out8<Addr> for Processor {
         cycles + MEM_ACCESS_T_CYCLES_8
     }
 }
+
+
+impl std::fmt::Display for Processor {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::result::Result<(), std::fmt::Error> {
+        write!(f, "{}", self.registers)
+    }
+}

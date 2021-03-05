@@ -5,9 +5,9 @@ use crate::utils;
 
 // io devices that can be mapped to memory
 pub trait IoDevice {
-    fn read_byte(&mut self, mmu: &Mmu, adder: u16) -> MemRead;
+    fn read_byte(&mut self, mmu: &Mmu, addr: u16) -> MemRead;
 
-    fn write_byte(&mut self, mmu: &Mmu, adder: u16, value: u8) -> MemWrite;
+    fn write_byte(&mut self, mmu: &Mmu, addr: u16, value: u8) -> MemWrite;
 }
 
 
@@ -55,12 +55,15 @@ impl Mmu {
         }
     }
 
-    pub fn read_byte(&self, adder: u16) -> u8 {
+    pub fn read_byte(&self, addr: u16) -> u8 {
 
-        match self.memory_mapped_devices.get(&adder) {
+        // if addr == 0xc302 {
+        //     println!("here!");
+        // }
+        match self.memory_mapped_devices.get(&addr) {
             Some(devices) => {
                 for device in devices {
-                    match device.borrow_mut().read_byte(self, adder) {
+                    match device.borrow_mut().read_byte(self, addr) {
                         MemRead::Read(data) => return data,
                         MemRead::Ignore => ()
                     }
@@ -73,12 +76,12 @@ impl Mmu {
         return 0;
     }
 
-    pub fn write_byte(&mut self, adder: u16, value: u8) {
-        let maybe_devices = self.memory_mapped_devices.get(&adder);
+    pub fn write_byte(&mut self, addr: u16, value: u8) {
+        let maybe_devices = self.memory_mapped_devices.get(&addr);
         match maybe_devices {
             Some(devices) => {
                 for device in devices {
-                    device.borrow_mut().write_byte(self, adder, value);
+                    device.borrow_mut().write_byte(self, addr, value);
                     
                 }
             },
@@ -91,12 +94,12 @@ impl Mmu {
         return;
     }
 
-    pub fn read_word(&self, adder: u16) -> u16 {
-        utils::build_u16(self.read_byte(adder + 1), self.read_byte(adder))
+    pub fn read_word(&self, addr: u16) -> u16 {
+        utils::build_u16(self.read_byte(addr + 1), self.read_byte(addr))
     }
 
-    pub fn write_word(&mut self, adder: u16, value: u16) {
-        self.write_byte(adder, utils::get_u16_low(value));
-        self.write_byte(adder + 1, utils::get_u16_high(value));
+    pub fn write_word(&mut self, addr: u16, value: u16) {
+        self.write_byte(addr, utils::get_u16_low(value));
+        self.write_byte(addr + 1, utils::get_u16_high(value));
     }
 }
