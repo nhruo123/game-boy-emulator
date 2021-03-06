@@ -1,11 +1,13 @@
-
+use crate::mmu::IoDevice;
+use crate::ppu::MemRead;
+use crate::ppu::MemWrite;
 use crate::ppu::Mmu;
-use crate::ppu::{ Ppu, PpuMode };
-use crate::utils::{ get_u16_low, get_u16_high, build_u16};
+use crate::ppu::{Ppu, PpuMode};
+use crate::utils::{build_u16, get_u16_high, get_u16_low};
+use std::cell::RefCell;
 
 const OAM_DMA_TIME: u32 = 640;
 const G_DMA_TIME: u32 = 640;
-
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum DmaType {
@@ -14,7 +16,6 @@ pub enum DmaType {
     Gdma,
     None,
 }
-
 
 pub struct DmaManager {
     dma_type: DmaType,
@@ -25,7 +26,6 @@ pub struct DmaManager {
     vram_dma_len: u8,
 }
 
-
 impl DmaManager {
     pub fn new() -> DmaManager {
         DmaManager {
@@ -33,21 +33,23 @@ impl DmaManager {
             oma_base_adder: 0,
             vram_dma_len: 0,
             vram_dma_source: 0,
-            vram_dma_target: 0, 
+            vram_dma_target: 0,
         }
     }
 
     // returns remaining clocks and if operation needs more time
     pub fn cycle(&mut self, ppu_mode: PpuMode, mmu: &mut Mmu, clock: u32) -> (u32, bool) {
+
         match self.dma_type {
-            DmaType::None => (clock, false),  
+            DmaType::None => (clock, false),
             DmaType::Hdma => {
                 if ppu_mode == PpuMode::HorizontalBlanking {
                     if clock >= 8 {
                         self.transfer_row(mmu);
-                        
-                        if self.vram_dma_len == 0x7F { self.dma_type = DmaType::None }
 
+                        if self.vram_dma_len == 0x7F {
+                            self.dma_type = DmaType::None
+                        }
                         (clock - 8, false)
                     } else {
                         (clock, true)
@@ -55,10 +57,9 @@ impl DmaManager {
                 } else {
                     (clock, false)
                 }
-            },
+            }
             DmaType::Oma => {
                 if clock >= OAM_DMA_TIME {
-                    
                     let base = (self.oma_base_adder as u16) << 8;
 
                     for index in 0x00..0xA0 {
@@ -71,16 +72,14 @@ impl DmaManager {
                 } else {
                     (clock, true)
                 }
-            },
+            }
             DmaType::Gdma => {
                 let rows = self.vram_dma_len + 1;
-                if clock > (rows as u32 * 8 ) {
+                if clock > (rows as u32 * 8) {
                     for _ in 0..rows {
                         self.transfer_row(mmu);
                     }
-    
                     self.dma_type = DmaType::None;
-    
                     (clock - (rows as u32 * 8), false)
                 } else {
                     (clock, true)
@@ -89,9 +88,8 @@ impl DmaManager {
         }
     }
 
-
     fn transfer_row(&mut self, mmu: &mut Mmu) {
-        for index in 0 .. 0x10 {
+        for index in 0..0x10 {
             let b = mmu.read_byte(self.vram_dma_source + index);
             mmu.write_byte(self.vram_dma_target + index, b);
         }
@@ -121,22 +119,62 @@ impl DmaManager {
             0xFF52 => get_u16_low(self.vram_dma_target),
             0xFF53 => get_u16_high(self.vram_dma_source),
             0xFF54 => get_u16_low(self.vram_dma_source),
-            0xFF55 => self.vram_dma_len | if self.dma_type == DmaType::None { 0x80 } else { 0 },
+            0xFF55 => {
+                self.vram_dma_len
+                    | if self.dma_type == DmaType::None {
+                        0x80
+                    } else {
+                        0
+                    }
+            }
             _ => panic!("Dma manager cannot handle adder at {}", adder),
         }
     }
 
     pub fn write_vram_dma(&mut self, adder: u16, val: u8) {
         match adder {
-            0xFF51 => { self.vram_dma_source = build_u16(val, get_u16_low(self.vram_dma_source)) },
-            0xFF52 => { self.vram_dma_source = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0) },
-            0xFF53 => { self.vram_dma_target = build_u16(val & 0x1F, get_u16_low(self.vram_dma_source)) },
-            0xFF54 => { self.vram_dma_target = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0) },
-            0xFF55 => { 
-                self.vram_dma_len = val & 0x7F; 
-                if (val & 0x80) == 0 { self.dma_type == DmaType::Gdma } 
-                else { self.dma_type == DmaType::Hdma }; },
+            0xFF51 => self.vram_dma_source = build_u16(val, get_u16_low(self.vram_dma_source)),
+            0xFF52 => {
+                self.vram_dma_source = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0)
+            }
+            0xFF53 => {
+                self.vram_dma_target = build_u16(val & 0x1F, get_u16_low(self.vram_dma_source))
+            }
+            0xFF54 => {
+                self.vram_dma_target = build_u16(get_u16_high(self.vram_dma_source), val & 0xF0)
+            }
+            0xFF55 => {
+                self.vram_dma_len = val & 0x7F;
+                if (val & 0x80) == 0 {
+                    self.dma_type == DmaType::Gdma
+                } else {
+                    self.dma_type == DmaType::Hdma
+                };
+            }
             _ => panic!("Dma manager cannot handle adder at {}", adder),
+        }
+    }
+}
+
+impl IoDevice for DmaManager {
+    fn read_byte(&mut self, _: &Mmu, addr: u16) -> MemRead {
+        match addr {
+            0xFF46 => MemRead::Read(self.read_oam()),
+            0xFF51..=0xFF55 => MemRead::Read(self.read_vram_dma(addr)),
+            _ => MemRead::Ignore,
+        }
+    }
+    fn write_byte(&mut self, _: &Mmu, addr: u16, val: u8) -> MemWrite {
+        match addr {
+            0xFF46 => {
+                self.write_oam(val);
+                MemWrite::Write
+            }
+            0xFF51..=0xFF55 => {
+                self.write_vram_dma(addr, val);
+                MemWrite::Write
+            }
+            _ => MemWrite::Ignore,
         }
     }
 }

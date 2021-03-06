@@ -57,9 +57,8 @@ impl Mmu {
 
     pub fn read_byte(&self, addr: u16) -> u8 {
 
-        // if addr == 0xc302 {
-        //     println!("here!");
-        // }
+
+
         match self.memory_mapped_devices.get(&addr) {
             Some(devices) => {
                 for device in devices {
@@ -70,6 +69,13 @@ impl Mmu {
                 }
             },
             None => ()
+        }
+
+        // TODO move this to a a new device 
+        // this is double speed controller that isn't implement but makes test fail.
+        if addr == 0xFF4D {
+            // tell the game is unsupported
+            return 0xFF
         }
 
         // no device knows how to deal with read return 0

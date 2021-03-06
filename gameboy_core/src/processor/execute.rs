@@ -199,7 +199,7 @@ impl Processor {
         self.registers.a = !self.registers.a;
 
         self.registers.set_nf(true);
-        self.registers.set_nf(true);
+        self.registers.set_hf(true);
 
         FETCH_T_CYCLES
     }
@@ -208,7 +208,7 @@ impl Processor {
         self.registers.set_cf(!self.registers.cf());
 
         self.registers.set_nf(false);
-        self.registers.set_nf(false);
+        self.registers.set_hf(false);
 
         FETCH_T_CYCLES
     }
@@ -217,7 +217,7 @@ impl Processor {
         self.registers.set_cf(true);
 
         self.registers.set_nf(false);
-        self.registers.set_nf(false);
+        self.registers.set_hf(false);
 
         FETCH_T_CYCLES
     }
@@ -381,7 +381,7 @@ impl Processor {
     {
         let (val, cycles) = self.read(io, mmu);
 
-        self.registers.set_zf(val & (1 << bit) != 0);
+        self.registers.set_zf(val & (1 << bit) == 0);
         self.registers.set_nf(false);
         self.registers.set_hf(true);
 
@@ -394,7 +394,7 @@ impl Processor {
         Self: In8<IO> + Out8<IO>
     {
         let (val, cycles) = self.read(io, mmu);
-        let cycles = self.write(io, mmu, val & (1 << bit)) + cycles;
+        let cycles = self.write(io, mmu, val | (1 << bit)) + cycles;
 
 
         cycles + (FETCH_T_CYCLES * 2)

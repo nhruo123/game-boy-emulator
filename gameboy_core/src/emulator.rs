@@ -1,4 +1,5 @@
 
+use crate::ppu::dma::DmaManager;
 use crate::ram::Ram;
 use crate::joypad::Joypad;
 use crate::cartridge_controller::CartridgeController;
@@ -29,6 +30,7 @@ pub struct Emulator {
     mmu: Mmu,
     ic: Rc<RefCell<Ic>>,
     ppu: Rc<RefCell<Ppu>>,
+    dma_manager: Rc<RefCell<DmaManager>>,
     timer: Rc<RefCell<Timer>>,
     cartridge_controller: Rc<RefCell<CartridgeController>>,
     joypad: Rc<RefCell<Joypad>>,
@@ -45,6 +47,7 @@ impl Emulator {
         let cartridge_controller = Rc::new(RefCell::new(CartridgeController::new(rom, emulator_config.game_boy_mode, emulator_config.allow_bad_checksum)));
         let joypad = Rc::new(RefCell::new(Joypad::new(Rc::clone(&hw), irq.clone())));
         let ram = Rc::new(RefCell::new(Ram::new()));
+        let dma_manager = Rc::new(RefCell::new(DmaManager::new()));
 
         let processor = Processor::new();
         let mut mmu = Mmu::new();
@@ -59,10 +62,16 @@ impl Emulator {
         mmu.register_device((0x8000, 0x9fff), Rc::clone(&ppu));
         mmu.register_device((0xff40, 0xff55), Rc::clone(&ppu));
         mmu.register_device((0xff68, 0xff6b), Rc::clone(&ppu));
+        mmu.register_device((0xFE00, 0xFE9F), Rc::clone(&ppu));
+
+        mmu.register_device((0xFF46, 0xFF46), Rc::clone(&dma_manager));
+        mmu.register_device((0xFF51, 0xFF55), Rc::clone(&dma_manager));
 
         mmu.register_device((0xff0f, 0xff0f), Rc::clone(&ic));
         mmu.register_device((0xffff, 0xffff), Rc::clone(&ic));
+
         mmu.register_device((0xff00, 0xff00), Rc::clone(&joypad));
+
         mmu.register_device((0xff04, 0xff07), Rc::clone(&timer));
 
         mmu.register_device((0xC000, 0xCFFF), Rc::clone(&ram));
@@ -79,6 +88,7 @@ impl Emulator {
             ppu,
             timer,
             cartridge_controller,
+            dma_manager,
             joypad,
         }
     }
@@ -88,8 +98,28 @@ impl Emulator {
         let mut clock = self.processor.cycle(&mut self.mmu);
 
         clock += self.processor.check_interrupt(&mut self.mmu, &self.ic);
+    
+        let (ppu_mode, ppu_clock) = {
+            self.ppu.borrow_mut().get_status()
+        };
 
-        self.ppu.borrow_mut().cycle(&mut self.mmu, clock);
+        let (new_ppu_clock, dma_in_progress) = self.dma_manager.borrow_mut().cycle(
+            ppu_mode,
+            &mut self.mmu,
+            ppu_clock + clock
+        );
+
+
+        if new_ppu_clock != ppu_clock {
+            self.ppu.borrow_mut().set_clock(new_ppu_clock);
+        }
+
+        // this is a temp fix for the borrow system TODO: find a nicer way to make the dma and ppu talk
+        if !dma_in_progress {
+            self.ppu.borrow_mut().cycle(&mut self.mmu, 0);
+        }
+
+        
         self.timer.borrow_mut().cycle(clock);
         self.joypad.borrow_mut().poll();
 

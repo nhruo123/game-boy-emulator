@@ -1,3 +1,4 @@
+use crate::ppu::Ppu;
 use crate::ppu::MonoColorPalette;
 use crate::ppu::Mmu;
 use crate::ppu::ColorPalette;
@@ -48,12 +49,12 @@ pub struct Sprite<'a> {
 }
 
 impl<'a> Sprite<'a> {
-    pub fn new(index:u16, big_sprites: bool, mmu: &Mmu, color_palette: &'a ColorPalette) -> Sprite<'a> {
+    pub fn new(index:u16, big_sprites: bool, ppu: &Ppu, color_palette: &'a ColorPalette) -> Sprite<'a> {
         Sprite {
-            y: mmu.read_byte(OAM_BASE + (index * 4)) as i32 - 16,
-            x: mmu.read_byte(OAM_BASE + 1 + (index * 4)) as i32 - 8,
-            tile_index: (mmu.read_byte(OAM_BASE + 2 + (index * 4)) & if big_sprites { 0xFE } else { 0xFF }) as u16,
-            attributes: Attributes::new(mmu.read_byte(OAM_BASE + 3 + (index * 4)), color_palette),
+            y: ppu.read_oma(OAM_BASE + (index * 4)) as i32 - 16,
+            x: ppu.read_oma(OAM_BASE + 1 + (index * 4)) as i32 - 8,
+            tile_index: (ppu.read_oma(OAM_BASE + 2 + (index * 4)) & if big_sprites { 0xFE } else { 0xFF }) as u16,
+            attributes: Attributes::new(ppu.read_oma(OAM_BASE + 3 + (index * 4)), color_palette),
         }
     }
 }
