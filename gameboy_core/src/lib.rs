@@ -10,3 +10,4 @@ mod ppu;
 mod timer;
 mod cartridge_controller;
 mod joypad;
+mod frequency_controller;

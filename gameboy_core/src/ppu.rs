@@ -131,7 +131,6 @@ impl Ppu {
     }
 
     pub fn cycle(&mut self, _mmu: &mut Mmu, clock: u32) {
-
         self.clock += clock;
 
         match self.status_register.mode {
@@ -211,41 +210,14 @@ impl Ppu {
     }
 
     // returns array of pixels to draw
-    fn draw_line(&self) -> Vec<(u8, u8, u8)> {
-        let mut combined_vec: Vec<(u8, u8, u8)> = vec![(0, 0, 0); DISPLAY_WIDTH];
+    fn draw_line(&self) -> Vec<u32> {
+        let mut line_vector: Vec<u32> = vec![0; DISPLAY_WIDTH];
 
-        let bg_vec = self.draw_background_and_window_line();
-        let sprite_vec = self.draw_sprites_line();
+        let bg_vec = self.draw_background_and_window_line(&mut line_vector);
+        let sprite_vec = self.draw_sprites_line(&mut line_vector, &bg_vec);
 
-        for x in 0..DISPLAY_WIDTH {
-            let (bg_color, bg_prio) = bg_vec[x];
-            let sprite_option = sprite_vec[x];
 
-            let selected_color = match sprite_option {
-                None => bg_color,
-                Some((sprit_color, is_blow_bg)) => {
-                    if self.control_register.bg_and_win_display {
-                        match bg_prio {
-                            BackGroundColorPriority::ColorZero => sprit_color,
-                            BackGroundColorPriority::NormalPriority => {
-                                if is_blow_bg {
-                                    bg_color
-                                } else {
-                                    sprit_color
-                                }
-                            }
-                            BackGroundColorPriority::HighPriority => bg_color,
-                        }
-                    } else {
-                        sprit_color
-                    }
-                }
-            };
-
-            combined_vec[x] = selected_color.get_rgb_values();
-        }
-
-        combined_vec
+        line_vector
     }
 
     fn get_tile_color(
@@ -265,9 +237,12 @@ impl Ppu {
         (h | l) as usize
     }
 
-    fn draw_background_and_window_line(&self) -> Vec<(Color, BackGroundColorPriority)> {
-        let mut line_vector: Vec<(Color, BackGroundColorPriority)> =
-            vec![(Color::new(), BackGroundColorPriority::NormalPriority); DISPLAY_WIDTH];
+    fn draw_background_and_window_line(
+        &self,
+        line_vector: &mut Vec<u32>,
+    ) -> Vec<BackGroundColorPriority> {
+        let mut gb_priority: Vec<BackGroundColorPriority> =
+            vec![BackGroundColorPriority::NormalPriority; DISPLAY_WIDTH];
 
         let draw_bg =
             self.game_boy_mode == GameBoyMode::Color || self.control_register.bg_and_win_display;
@@ -276,8 +251,9 @@ impl Ppu {
                 && self.control_register.bg_and_win_display);
 
         if !draw_bg && !draw_win {
-            return line_vector;
+            return gb_priority;
         }
+
         for x_index in 0..DISPLAY_WIDTH {
             let (tile_map_base_adder, tile_y, tile_x, y_offset, x_offset) = if draw_win
                 && (self.line >= self.window_y_pos)
@@ -314,7 +290,7 @@ impl Ppu {
                 let attributes_val = self.read_from_vram(1, tile_map_adder);
                 Attributes::new(attributes_val, &self.bg_color_palette)
             } else {
-                Attributes::normal_gameboy_attributes(&self.bg_mono_palette)
+                Attributes::new_normal_gb(&self.bg_mono_palette)
             };
 
             let tile_index = self.read_from_vram(0, tile_map_adder);
@@ -348,40 +324,21 @@ impl Ppu {
                 BackGroundColorPriority::NormalPriority
             };
 
-            // if color_index != 0 {
-            //     for tile_index in 0..384 {
-            //         let adder = 0x8000 + 16 * tile_index;
-
-            //         let l = self.read_from_vram(attributes.vram_bank, adder);
-            //         let h = self.read_from_vram(attributes.vram_bank, adder + 1);
-
-            //         let title_data: u16 = ((h as u16) << 8) | (l as u16);
-
-            //         println!("title data is: {:#X} at index {}", title_data, tile_index);
-            //     }
-            // }
-
-            // if color_index != 0 {
-            //     for bg_adder in 0x9800..0x9BFF {
-            //         let val = self.read_from_vram(0, bg_adder);
-
-            //         println!("title data is: {} at index {}", val, bg_adder - 0x9800);
-            //     }
-            // }
-
             let color = attributes.palette[color_index];
-            line_vector[(x_index) as usize] = (color, bg_prio);
+            gb_priority[(x_index) as usize] = bg_prio;
+            line_vector[(x_index) as usize] = color.get_rgb_values();
         }
 
-        line_vector
+        gb_priority
     }
 
-    // color and blow background == true
-    fn draw_sprites_line(&self) -> Vec<Option<(Color, bool)>> {
-        let mut line_vector: Vec<Option<(Color, bool)>> = vec![None; DISPLAY_WIDTH];
-
+    fn draw_sprites_line(
+        &self,
+        line_vector: &mut Vec<u32>,
+        bg_vector: &Vec<BackGroundColorPriority>,
+    ) {
         if !self.control_register.sprit_display_enabled {
-            return line_vector;
+            return;
         }
 
         let sprite_hight: u16 = if self.control_register.sprite_size {
@@ -389,22 +346,34 @@ impl Ppu {
         } else {
             8
         };
+
         let sprite_width: u16 = 8;
 
         let line = self.line as i32;
 
         for sprite_index in 0..40 {
-            let sprite = Sprite::new(
-                sprite_index,
-                self.control_register.sprite_size,
-                self,
-                &self.object_color_palette,
-            );
+            let sprite = if self.game_boy_mode == GameBoyMode::Color {
+                Sprite::new(
+                    sprite_index,
+                    self.control_register.sprite_size,
+                    self,
+                    &self.object_color_palette,
+                )
+            } else {
+                Sprite::new_normal_gb(
+                    sprite_index,
+                    self.control_register.sprite_size,
+                    self,
+                    &self.object_mono_palette_0,
+                    &self.object_mono_palette_1,
+                )
+            };
 
             // sprite out of screen
             if line < sprite.y || line >= sprite.y + (sprite_hight as i32) {
                 continue;
             }
+
             if sprite.x < -7 || sprite.x >= DISPLAY_WIDTH as i32 + 8 {
                 continue;
             }
@@ -417,58 +386,41 @@ impl Ppu {
 
             // Every tile is 16 bytes of mem and eve1ry line is 2 bytes aka 8 bytes
             let tile_adder = 0x8000 + (sprite.tile_index * 16) + (tile_y * 2);
-
-            let (tile_byte_0, tile_byte_1) = if self.game_boy_mode == GameBoyMode::Color {
-                (
-                    self.read_from_vram(sprite.attributes.vram_bank, tile_adder),
-                    self.read_from_vram(sprite.attributes.vram_bank, tile_adder + 1),
-                )
-            } else {
-                (
-                    self.read_from_vram(0, tile_adder),
-                    self.read_from_vram(0, tile_adder + 1),
-                )
-            };
+            let tile_byte_low = self.read_from_vram(sprite.attributes.vram_bank, tile_adder);
+            let tile_byte_high = self.read_from_vram(sprite.attributes.vram_bank, tile_adder + 1);
 
             for x_index in 0..sprite_width {
-                if sprite.x + (x_index as i32) < 0 || sprite.x >= (DISPLAY_WIDTH as i32) {
+
+                if sprite.x + (x_index as i32) < 0 || sprite.x + (x_index as i32) >= (DISPLAY_WIDTH as i32) {
                     continue;
                 }
 
-                let color_musk = 1
+                let color_mask = 1
                     << (if sprite.attributes.x_flip {
                         x_index
                     } else {
                         7 - x_index
                     });
 
-                let color_index = if color_musk & tile_byte_0 != 0 { 1 } else { 0 }
-                    | if color_musk & tile_byte_1 != 0 { 2 } else { 0 };
+                let color_index = if color_mask & tile_byte_low != 0 { 1 } else { 0 }
+                    | if color_mask & tile_byte_high != 0 { 2 } else { 0 };
 
                 // 0 is transparent in sprites
                 if color_index == 0 {
                     continue;
                 }
 
-                if self.game_boy_mode == GameBoyMode::Color {
-                    let color = self.object_color_palette.get_color(color_index);
+                let color = sprite.attributes.palette[color_index].get_rgb_values();
+                let x_index = (x_index as i32 + sprite.x) as usize;
+                
 
-                    line_vector[(x_index as i32 + sprite.x) as usize] =
-                        Some((color, sprite.attributes.priority))
-                } else {
-                    let color = if sprite.attributes.palette_number == 0 {
-                        self.object_mono_palette_0.get_color(color_index)
-                    } else {
-                        self.object_mono_palette_1.get_color(color_index)
-                    };
-
-                    line_vector[(x_index as i32 + sprite.x) as usize] =
-                        Some((color, sprite.attributes.priority))
+                if self.control_register.bg_and_win_display && bg_vector[x_index] == BackGroundColorPriority::NormalPriority && sprite.attributes.priority {
+                    continue;
                 }
+
+                line_vector[x_index] = color;
             }
         }
-
-        line_vector
     }
 
     pub fn read_oma(&self, addr: u16) -> u8 {
@@ -495,7 +447,6 @@ impl IoDevice for Ppu {
             0xFF43 => MemRead::Read(self.x_scroll),
             0xFF44 => MemRead::Read(self.line),
             0xFF45 => MemRead::Read(self.line_compare),
-            
             0xFF47 => MemRead::Read(self.bg_mono_palette.read()),
             0xFF48 => MemRead::Read(self.object_mono_palette_0.read()),
             0xFF49 => MemRead::Read(self.object_mono_palette_1.read()),
@@ -504,8 +455,6 @@ impl IoDevice for Ppu {
             0xFF4B => MemRead::Read(self.window_x_pos),
 
             0xFF4F => MemRead::Read(self.selected_vram_bank as u8),
-
-            
 
             0xFF68 => MemRead::Read(self.bg_color_palette.read_index_reg()),
             0xFF69 => MemRead::Read(self.bg_color_palette.read_data_reg()),

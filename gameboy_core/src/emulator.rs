@@ -1,4 +1,4 @@
-
+use crate::frequency_controller::FrequencyController;
 use crate::ppu::dma::DmaManager;
 use crate::ram::Ram;
 use crate::joypad::Joypad;
@@ -12,6 +12,7 @@ use crate::hardware::Hardware;
 use crate::processor::Processor;
 use crate::mmu::Mmu;
 
+
 #[derive(PartialEq, Copy, Clone)]
 pub enum GameBoyMode {
     Classic,
@@ -22,6 +23,8 @@ pub enum GameBoyMode {
 pub struct EmulatorConfig {
     pub game_boy_mode: GameBoyMode,
     pub allow_bad_checksum: bool,
+    pub native_speed: bool,
+    pub cpu_speed: u64, // nano sec per cycle
 }
 
 pub struct Emulator {
@@ -34,6 +37,7 @@ pub struct Emulator {
     timer: Rc<RefCell<Timer>>,
     cartridge_controller: Rc<RefCell<CartridgeController>>,
     joypad: Rc<RefCell<Joypad>>,
+    fc: FrequencyController,
 }
 
 
@@ -53,6 +57,8 @@ impl Emulator {
         let mut mmu = Mmu::new();
         let ppu = Rc::new(RefCell::new(Ppu::new(Rc::clone(&hw), irq.clone(), emulator_config.game_boy_mode)));
         let timer = Rc::new(RefCell::new(Timer::new(irq.clone())));
+
+        let fc = FrequencyController::new(Rc::clone(&hw) ,emulator_config.cpu_speed, emulator_config.native_speed);
 
 
         mmu.register_device((0x0000, 0x7fff), Rc::clone(&cartridge_controller));
@@ -90,10 +96,13 @@ impl Emulator {
             cartridge_controller,
             dma_manager,
             joypad,
+            fc,
         }
     }
 
     fn cycle(&mut self) {
+        
+        let cycle_start = { self.hw.borrow_mut().clock() };
 
         let mut clock = self.processor.cycle(&mut self.mmu);
 
@@ -123,10 +132,8 @@ impl Emulator {
         self.timer.borrow_mut().cycle(clock);
         self.joypad.borrow_mut().poll();
 
-        // std::thread::sleep(std::time::Duration::from_micros(1));
 
-        // TODO add sleep for the clock cycle the cpu did.
-
+        self.fc.add_delay(cycle_start, clock);
     }
 
     // cycle as long as hw allows

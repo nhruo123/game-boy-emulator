@@ -126,13 +126,12 @@ impl Hardware {
 }
 
 impl GameBoyHardware::Hardware for Hardware {
-    fn draw_line(&mut self, line: usize, buffer: &[(u8, u8, u8)]) {
+    fn draw_line(&mut self, line: usize, buffer: &[u32]) {
         let mut screen_buffer = self.screen_buffer.lock().unwrap();
 
         for i in 0..buffer.len() {
             let base = line * GameBoyHardware::DISPLAY_WIDTH;
-            let rgb = (buffer[i].2 as u32) | ((buffer[i].1 as u32) << 8) | ((buffer[i].1 as u32) << 16) | (0xFFFF << 24);
-            screen_buffer[base + i] = rgb;
+            screen_buffer[base + i] = buffer[i];
         }
     }
 
@@ -140,12 +139,10 @@ impl GameBoyHardware::Hardware for Hardware {
         *self.key_state.lock().unwrap().get_mut(&key).expect("Key err")
     }
 
-    fn clock(&mut self) -> u64 { 
-        let epoch = std::time::SystemTime::now()
+    fn clock(&mut self) -> Duration { 
+        std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .expect("Couldn't get epoch");
-
-        epoch.as_micros() as u64    
+            .expect("Couldn't get epoch")
     }
 
     fn run(&mut self) -> bool {

@@ -75,13 +75,15 @@ impl Color {
     }
 
 
-    pub fn get_rgb_values(&self) -> (u8, u8, u8) {
-        match *self {
+    pub fn get_rgb_values(&self) -> u32 {
+        let (r, g, b) = match *self {
             Color::Rgb(r,g,b) => (r,g,b),
             Color::Black => (0,0,0),
             Color::LightGray => (0xD3, 0xD3, 0xD3),
             Color::DarkGray => (0xA9, 0xA9, 0xA9),
             Color::White => (0xFF, 0xFF, 0xFF),
-        }
+        };
+
+        (b as u32) | ((g as u32) << 8) | ((r as u32) << 16) | (0xFFFF << 24)
     }
 }

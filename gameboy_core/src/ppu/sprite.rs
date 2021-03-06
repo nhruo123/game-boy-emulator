@@ -28,7 +28,7 @@ impl<'a> Attributes<'a> {
         }
     }
 
-    pub fn normal_gameboy_attributes(mono_color_palette: &'a MonoColorPalette) ->  Attributes<'a> {
+    pub fn new_normal_gb(mono_color_palette: &'a MonoColorPalette) ->  Attributes<'a> {
         Attributes {
             palette: mono_color_palette.get_color_array(),
             vram_bank: 0,
@@ -36,6 +36,23 @@ impl<'a> Attributes<'a> {
             x_flip: false,
             y_flip: false,
             priority: false,
+        }
+    }
+
+    pub fn new_new_normal_gb_sprite(val: u8, mono_cp_0: &'a MonoColorPalette, mono_cp_1: &'a MonoColorPalette)  ->  Attributes<'a> {
+        let mono_cp = if (val & 0x10) == 0 {
+            mono_cp_0
+        } else {
+            mono_cp_1
+        };
+
+        Attributes {
+            palette: mono_cp.get_color_array(),
+            vram_bank: 0,
+            palette_number: (val & 0x10) as usize,
+            x_flip: (val & 0x20) != 0,
+            y_flip: (val & 0x40) != 0,
+            priority: (val & 0x80) != 0,
         }
     }
 }
@@ -51,10 +68,19 @@ pub struct Sprite<'a> {
 impl<'a> Sprite<'a> {
     pub fn new(index:u16, big_sprites: bool, ppu: &Ppu, color_palette: &'a ColorPalette) -> Sprite<'a> {
         Sprite {
-            y: ppu.read_oma(OAM_BASE + (index * 4)) as i32 - 16,
-            x: ppu.read_oma(OAM_BASE + 1 + (index * 4)) as i32 - 8,
+            y: ppu.read_oma(OAM_BASE + (index * 4)) as u16 as i32 - 16,
+            x: ppu.read_oma(OAM_BASE + 1 + (index * 4)) as u16 as i32 - 8,
             tile_index: (ppu.read_oma(OAM_BASE + 2 + (index * 4)) & if big_sprites { 0xFE } else { 0xFF }) as u16,
             attributes: Attributes::new(ppu.read_oma(OAM_BASE + 3 + (index * 4)), color_palette),
+        }
+    }
+
+    pub fn new_normal_gb(index:u16, big_sprites: bool, ppu: &Ppu, mono_cp_0: &'a MonoColorPalette, mono_cp_1: &'a MonoColorPalette) -> Sprite<'a> {
+        Sprite {
+            y: ppu.read_oma(OAM_BASE + (index * 4)) as u16 as i32 - 16,
+            x: ppu.read_oma(OAM_BASE + 1 + (index * 4)) as u16 as i32 - 8,
+            tile_index: (ppu.read_oma(OAM_BASE + 2 + (index * 4)) & if big_sprites { 0xFE } else { 0xFF }) as u16,
+            attributes: Attributes::new_new_normal_gb_sprite(ppu.read_oma(OAM_BASE + 3 + (index * 4)), mono_cp_0, mono_cp_1),
         }
     }
 }

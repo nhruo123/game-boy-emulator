@@ -1,5 +1,11 @@
+
+use std::time::Duration;
+
 pub const DISPLAY_WIDTH: usize = 160;
 pub const DISPLAY_HIGHT: usize = 144;
+
+// In nano seconds
+pub const PROCESSOR_CLOCK_SPEED: u64  = 238;
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum Key {
@@ -14,13 +20,12 @@ pub enum Key {
 }
 
 pub trait Hardware {
-    fn draw_line(&mut self, line: usize, buffer: &[(u8, u8, u8)]);
+    fn draw_line(&mut self, line: usize, buffer: &[u32]);
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 
 
-    // The return value needs to be epoch time in microseconds.
-    fn clock(&mut self) -> u64;
+    fn clock(&mut self) -> Duration;
 
 
     fn run(&mut self) -> bool;

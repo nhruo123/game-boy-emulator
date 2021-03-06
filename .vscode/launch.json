@@ -19,7 +19,7 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": ["./roms/Tetris (World) (Rev A).gb"],
             "cwd": "${workspaceFolder}"
         },
     ]
