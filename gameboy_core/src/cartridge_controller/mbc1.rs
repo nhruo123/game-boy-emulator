@@ -5,8 +5,8 @@ use crate::cartridge_controller::Cartridge;
 
 
 const MBC1_TYPE: u8 = 0x1;
-const MBC1_RAM_TYPE: u8 = 0x1;
-const MBC1_RAM_BATTERY_TYPE: u8 = 0x1;
+const MBC1_RAM_TYPE: u8 = 0x2;
+const MBC1_RAM_BATTERY_TYPE: u8 = 0x3;
 
 pub struct Mbc1 {
     rom: Vec<u8>,
