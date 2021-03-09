@@ -15,7 +15,8 @@ mod registers;
 
 const ZERO_PAGE_ADDR: u16 = 0xFF00;
 
-type TCycles = u32;
+pub type TCycles = u32;
+pub const T_CYCLE_FREQUENCY: u32 = 4194304;
 
 const FETCH_T_CYCLES: TCycles = 4;
 const MEM_ACCESS_T_CYCLES_8: TCycles = 4;

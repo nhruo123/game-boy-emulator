@@ -11,3 +11,4 @@ mod timer;
 mod cartridge_controller;
 mod joypad;
 mod frequency_controller;
+mod apu;

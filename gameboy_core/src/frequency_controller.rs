@@ -1,3 +1,4 @@
+use crate::processor::TCycles;
 use std::time::Duration;
 use crate::hardware::Hardware;
 use std::cell::RefCell;
@@ -21,7 +22,7 @@ impl FrequencyController {
         }
     }
 
-    pub fn add_delay(&mut self, cycle_start: Duration, cpu_cycles: u32) {
+    pub fn add_delay(&mut self, cycle_start: Duration, cpu_cycles: TCycles) {
         if self.native_speed {
             return;
         }
