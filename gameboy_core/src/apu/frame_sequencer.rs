@@ -17,15 +17,20 @@ impl FrameSequencer {
         }
     }
 
-    pub fn cycle(&mut self, clocks: TCycles) {
+    pub fn cycle(&mut self, clocks: TCycles) -> bool {
         self.clock += clocks;
 
-        while self.clock >= FRAME_TO_CYCLE_RATIO {
-            self.current_cycle += 1;
+        if self.clock >= FRAME_TO_CYCLE_RATIO {
             self.clock -= FRAME_TO_CYCLE_RATIO;
-        }
 
-        self.current_cycle %= 8;
+            self.current_cycle += 1;
+            self.current_cycle %= 8;
+
+
+            true
+        } else {
+            false
+        }
     }
 
     pub fn reset(&mut self) {

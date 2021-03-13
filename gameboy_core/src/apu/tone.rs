@@ -1,10 +1,18 @@
+use crate::apu::sound_length::SoundLength;
+use crate::apu::volume::Volume;
 use crate::apu::frame_sequencer::FrameSequencer;
-use crate::processor::T_CYCLE_FREQUENCY;
+use crate::processor::{TCycles, T_CYCLE_FREQUENCY};
 use crate::utils;
 
 const BASE_SWEEP_FREQUENCY: u32 = 128;
+pub const MAX_TONE_VOLUME: u32 = 15;
 
-const WAVE_PATTERN: [[u16; 8]; 4] = [
+const MAX_SOUND_LEN: u8 = 64;
+
+const WAVE_STATES: usize = 8;
+const WAVE_TYPES: usize = 4;
+
+const WAVE_PATTERN: [[u16; WAVE_STATES]; WAVE_TYPES] = [
     [1, 0, 0, 0, 0, 0, 0, 0],
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 0, 0, 0, 1, 1, 1],
@@ -12,6 +20,7 @@ const WAVE_PATTERN: [[u16; 8]; 4] = [
 ];
 
 pub struct Tone {
+    clock: TCycles,
     channel_enabled: bool,
 
     sweep_enabled: bool,
@@ -22,36 +31,32 @@ pub struct Tone {
     sweep_shift: u8,
 
     selected_wave_pattern: u8,
+    currant_wave_cycle: usize,
 
-    initial_volume: u8,
-    volume: u8,
-    vol_envelope_increase: bool,
-    envelope_counter: u8,
-
-    sound_len: u8,
-    dec_sound_len: bool,
 
     frequency: u16,
+
+    volume: Volume,
+    sound_length: SoundLength,
     frame_sequencer: FrameSequencer,
 }
 
 impl Tone {
     pub fn new(sweep_enabled: bool) -> Self {
         Self {
+            clock: 0,
             sweep_enabled,
             sweep_time: 0,
             sweep_increase: false,
             sweep_shift: 0,
             currant_sweep_cycle: 0,
             selected_wave_pattern: 0,
-            volume: 0,
-            vol_envelope_increase: false,
-            envelope_counter: 0,
-            sound_len: 0,
-            dec_sound_len: false,
+            volume: Volume::new(),
+            sound_length: SoundLength::new(MAX_SOUND_LEN),
             frequency: 0,
             frame_sequencer: FrameSequencer::new(),
             channel_enabled: false,
+            currant_wave_cycle: 0,
         }
     }
 
@@ -68,12 +73,10 @@ impl Tone {
             },
             0x01 => 0x3F | self.selected_wave_pattern << 6,
             0x02 => {
-                (self.envelope_counter)
-                    | (if self.vol_envelope_increase { 0x4 } else { 0 })
-                    | (self.volume << 4)
+                self.volume.read()
             }
             0x03 => 0xFF, // write only memory
-            0x04 => 0xFB | if self.dec_sound_len { 0x40 } else { 0 },
+            0x04 => 0xFB | if self.sound_length.dec_sound_len { 0x40 } else { 0 },
             _ => unreachable!("Bad addr"),
         }
     }
@@ -90,20 +93,16 @@ impl Tone {
                 false => unreachable!("We cant write a sweep register to a tone with no sweep"),
             },
             0x01 => {
-                self.sound_len = val & 0x3F;
+                self.sound_length.set_length(val & 0x3F);
                 self.selected_wave_pattern = (val & 0xC0) >> 6;
             }
             0x02 => {
-                self.envelope_counter = val & 0x3;
-                self.vol_envelope_increase = val & 0x4 != 0;
-                self.volume = val >> 4;
-                self.initial_volume = self.volume
+                self.volume.write(val);
             }
             0x03 => self.frequency = utils::build_u16(utils::get_u16_high(self.frequency), val),
             0x04 => {
                 self.frequency = utils::build_u16(val & 0x3, utils::get_u16_low(self.frequency));
-                self.dec_sound_len = (val & 0x40) == 1;
-                
+                self.sound_length.dec_sound_len = (val & 0x40) == 1;
                 if (val & 0x80) == 1 {
                     self.enable_channel();
                 }
@@ -122,7 +121,9 @@ impl Tone {
         if self.currant_sweep_cycle == self.sweep_time {
             self.currant_sweep_cycle = 0;
 
-            let sweep_change = self.frequency / (self.sweep_shift as u16).pow(2);
+            let pow_base: u16 = 2;
+            
+            let sweep_change = self.frequency / pow_base.pow(self.sweep_shift as u32);
 
             self.frequency = if self.sweep_increase {
                 self.frequency.wrapping_add(sweep_change)
@@ -131,50 +132,52 @@ impl Tone {
             };
 
             if self.frequency > 2047 {
-                self.frequency = 0;
+                self.channel_enabled = false;
             }
         }
     }
 
-    fn cycle_volume_envelope(&mut self) {
-        if self.envelope_counter == 0 {
-            return;
-        }
-
-        if self.volume == 15 || self.volume == 0 {
-            self.envelope_counter = 0;
-            return;
-        }
-
-        if self.vol_envelope_increase {
-            self.volume += 1;
-        } else {
-            self.volume -=1;
-        }
-
-        self.envelope_counter -= 1;
-    }
-
-    fn cycle_len_counter(&mut self) {
-        if !self.dec_sound_len {
-            return;
-        }
-
-        if self.sound_len == 0 {
-            self.channel_enabled = false;
-        } else {
-            self.sound_len -= 1;
-        }
-    }
-
-    fn get_t_cycle_ratio(&self) -> u16 {
-        (T_CYCLE_FREQUENCY / (self.frequency as u32)) as u16
+    fn get_t_cycle_ratio(&self) -> u32 {
+        T_CYCLE_FREQUENCY / ((2048 - self.frequency as u32) << 5)
     }
 
     fn enable_channel(&mut self) {
-        self.channel_enabled = true;
-        self.sound_len = 64;
-        self.volume = self.initial_volume;
+        self.volume.reset();
         self.frame_sequencer.reset();
+        
+        self.currant_wave_cycle = 0;
+        
+
+        self.channel_enabled = true;
+    }
+
+    pub fn step(&mut self, clocks: TCycles) -> u16 {
+        self.clock += clocks;
+
+        if self.frame_sequencer.cycle(clocks) {
+            // we got a new frame sequencer
+            if self.frame_sequencer.current_cycle % 2 == 0 {
+                self.sound_length.cycle(&mut self.channel_enabled);
+            }
+            if self.frame_sequencer.current_cycle == 7 {
+                self.volume.cycle();
+            }
+            if self.frame_sequencer.current_cycle == 2 || self.frame_sequencer.current_cycle == 6 {
+                self.cycle_sweep();
+            }
+        }
+
+        
+        // handle wave pattern
+        if self.clock >= self.get_t_cycle_ratio() {
+            self.clock -= self.get_t_cycle_ratio();
+            
+            self.currant_wave_cycle += 1;
+
+            self.currant_wave_cycle %= WAVE_STATES;
+        }
+
+
+        WAVE_PATTERN[self.selected_wave_pattern as usize][self.currant_wave_cycle] * self.volume.volume as u16
     }
 }
