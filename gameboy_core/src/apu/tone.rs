@@ -81,7 +81,6 @@ impl Tone {
         }
     }
 
-    // returns if the tone needs to be restarted
     pub fn write_byte(&mut self, base_addr: u16, addr: u16, val: u8) {
         match addr - base_addr {
             0x00 => match self.sweep_enabled {
@@ -102,8 +101,8 @@ impl Tone {
             0x03 => self.frequency = utils::build_u16(utils::get_u16_high(self.frequency), val),
             0x04 => {
                 self.frequency = utils::build_u16(val & 0x3, utils::get_u16_low(self.frequency));
-                self.sound_length.dec_sound_len = (val & 0x40) == 1;
-                if (val & 0x80) == 1 {
+                self.sound_length.dec_sound_len = (val & 0x40) != 0;
+                if (val & 0x80) != 0 {
                     self.enable_channel();
                 }
             }
@@ -146,12 +145,17 @@ impl Tone {
         self.frame_sequencer.reset();
         
         self.currant_wave_cycle = 0;
+        self.clock = 0;
         
-
         self.channel_enabled = true;
     }
 
-    pub fn step(&mut self, clocks: TCycles) -> u16 {
+    pub fn cycle(&mut self, clocks: TCycles) -> u16 {
+        if !self.channel_enabled {
+            return 0;
+        }
+
+
         self.clock += clocks;
 
         if self.frame_sequencer.cycle(clocks) {

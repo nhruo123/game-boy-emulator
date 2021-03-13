@@ -40,6 +40,43 @@ impl Noise {
         }
     }
 
+    pub fn read_byte(&self, base_addr: u16, addr: u16) -> u8 {
+        match addr - base_addr {
+            0x00 => 0xFF,
+            0x01 => 0xFF,
+            0x02 => self.volume.read(),
+            0x03 => self.frequency_divider | if self.width_mode { 0x4 } else { 0x0 } | (self.frequency << 4),
+            0x04 => 0xFB | if self.sound_length.dec_sound_len { 0x40 } else { 0 },
+            _ => unreachable!("Bad addr"),
+        }
+    }
+
+    pub fn write_byte(&mut self, base_addr: u16, addr: u16, val: u8) {
+        match addr - base_addr {
+            0x00 => {
+                // unmapped
+                return;
+            },
+            0x01 => {
+                self.sound_length.set_length(val & 0x1F);
+                
+            }
+            0x02 => self.volume.write(val),
+            0x03 => {
+                self.frequency_divider = val & 0x3;
+                self.width_mode = val & 0x4 != 0;
+                self.frequency = val >> 4;
+            },
+            0x04 => {
+                self.sound_length.dec_sound_len = (val & 0x40) != 0;
+                if (val & 0x80) != 1 {
+                    self.enable_channel();
+                }
+            }
+            _ => unreachable!("Bad addr"),
+        };
+    }
+
     fn get_t_cycle_ratio(&self) -> u32 {
         let pow_base: u32 = 2;
 
@@ -47,7 +84,23 @@ impl Noise {
             / pow_base.pow(self.frequency as u32 + 1)
     }
 
+    fn enable_channel(&mut self) {
+        self.frame_sequencer.reset();
+        self.sound_length.reset();
+        
+        // not sure if we need to reset shift_register
+        self.shift_register = 1; 
+        self.clock = 0;
+        
+
+        self.channel_enabled = true;
+    }
+
     pub fn step(&mut self, clocks: TCycles) -> u16 {
+        if !self.channel_enabled {
+            return 0;
+        }
+
         self.clock += clocks;
 
         if self.frame_sequencer.cycle(clocks) {
