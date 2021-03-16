@@ -21,7 +21,7 @@ const WAVE_PATTERN: [[u16; WAVE_STATES]; WAVE_TYPES] = [
 
 pub struct Tone {
     clock: TCycles,
-    channel_enabled: bool,
+    pub channel_enabled: bool,
 
     sweep_enabled: bool,
 

@@ -24,9 +24,12 @@ pub trait Hardware {
 
     fn joypad_pressed(&mut self, key: Key) -> bool;
 
-
     fn clock(&mut self) -> Duration;
 
+    // returns the pcm sample rate on hz
+    fn pcm_sample_rate(&mut self) -> u32;
+
+    fn next_pcm_amplitude(&mut self, amplitude: f32);
 
     fn run(&mut self) -> bool;
 }

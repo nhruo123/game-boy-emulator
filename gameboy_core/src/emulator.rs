@@ -1,3 +1,4 @@
+use crate::apu::Apu;
 use crate::frequency_controller::FrequencyController;
 use crate::ppu::dma::DmaManager;
 use crate::ram::Ram;
@@ -37,6 +38,7 @@ pub struct Emulator {
     timer: Rc<RefCell<Timer>>,
     cartridge_controller: Rc<RefCell<CartridgeController>>,
     joypad: Rc<RefCell<Joypad>>,
+    apt: Rc<RefCell<Apu>>,
     fc: FrequencyController,
 }
 
@@ -58,6 +60,8 @@ impl Emulator {
         let ppu = Rc::new(RefCell::new(Ppu::new(Rc::clone(&hw), irq.clone(), emulator_config.game_boy_mode)));
         let timer = Rc::new(RefCell::new(Timer::new(irq.clone())));
 
+        let apt = Rc::new(RefCell::new(Apu::new(Rc::clone(&hw), (1000000000 / emulator_config.cpu_speed) as u32)));
+
         let fc = FrequencyController::new(Rc::clone(&hw) ,emulator_config.cpu_speed, emulator_config.native_speed);
 
 
@@ -72,6 +76,8 @@ impl Emulator {
 
         mmu.register_device((0xFF46, 0xFF46), Rc::clone(&dma_manager));
         mmu.register_device((0xFF51, 0xFF55), Rc::clone(&dma_manager));
+
+        mmu.register_device((0xFF10, 0xFF3F), Rc::clone(&apt));
 
         mmu.register_device((0xff0f, 0xff0f), Rc::clone(&ic));
         mmu.register_device((0xffff, 0xffff), Rc::clone(&ic));
@@ -97,6 +103,7 @@ impl Emulator {
             dma_manager,
             joypad,
             fc,
+            apt,
         }
     }
 

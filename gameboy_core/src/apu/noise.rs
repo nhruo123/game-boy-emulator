@@ -7,7 +7,7 @@ use crate::processor::T_CYCLE_FREQUENCY;
 const MAX_SOUND_LEN: u8 = 64;
 
 pub struct Noise {
-    channel_enabled: bool,
+    pub channel_enabled: bool,
 
     last_lower_bit: u16,
 
@@ -87,8 +87,8 @@ impl Noise {
     fn enable_channel(&mut self) {
         self.frame_sequencer.reset();
         self.sound_length.reset();
+
         
-        // not sure if we need to reset shift_register
         self.shift_register = 1; 
         self.clock = 0;
         
@@ -96,7 +96,7 @@ impl Noise {
         self.channel_enabled = true;
     }
 
-    pub fn step(&mut self, clocks: TCycles) -> u16 {
+    pub fn cycle(&mut self, clocks: TCycles) -> u16 {
         if !self.channel_enabled {
             return 0;
         }

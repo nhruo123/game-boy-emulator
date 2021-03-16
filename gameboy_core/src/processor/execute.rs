@@ -600,7 +600,7 @@ impl Processor {
     }
 
     pub fn undefined(&mut self, opcode: u8) -> ! {
-        panic!("Undefined opcode {}", opcode)
+        panic!("Undefined opcode {:04X}", opcode)
     }
 
     pub fn cb_opcodes(&mut self, mmu: &mut Mmu) -> TCycles {

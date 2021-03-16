@@ -9,7 +9,7 @@ const WAVE_PATTERN_RAM_SIZE: usize = 32;
 const MAX_WAVE_LEN: u8 = 255;
 
 pub struct Wave {
-    channel_enabled: bool,
+    pub channel_enabled: bool,
 
     frequency: u16,
 
@@ -37,7 +37,7 @@ impl Wave {
             wave_index: 0,
             sound_length: SoundLength::new(MAX_WAVE_LEN),
             volume: 0,
-            wave_pattern_ram: vec![0; WAVE_PATTERN_RAM_SIZE / 2],
+            wave_pattern_ram: [0; WAVE_PATTERN_RAM_SIZE / 2],
         }
     }
 
@@ -72,13 +72,14 @@ impl Wave {
                     self.enable_channel();
                 }
             },
-            0x16 ..= 0x26 => self.wave_pattern_ram[(addr - base_addr - 0x16) as usize] = val,
+            0x16 ..= 0x25 => self.wave_pattern_ram[(addr - base_addr - 0x16) as usize] = val,
             _ => unreachable!("Bad addr"),
         };
     }
 
     fn enable_channel(&mut self) {
         self.frame_sequencer.reset();
+        self.sound_length.reset();
         
         self.wave_index = 0;
         self.clock = 0;
@@ -114,7 +115,7 @@ impl Wave {
 
         if self.volume != 0 {
             let current_amplitude_byte = self.wave_pattern_ram[self.wave_index / 2];
-            
+
             let current_amplitude = if self.wave_index % 2 == 0 {
                 current_amplitude_byte & 0xF
             } else {
